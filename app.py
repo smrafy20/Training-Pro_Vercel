@@ -123,8 +123,8 @@ def get_session_info():
 def check_auth():
     """Front-end convenience route: returns {authenticated, name, role}."""
     if 'name' in session and 'role' in session:
-        return jsonify({'authenticated': True, 'name': session['name'], 'role': session['role']})
-    return jsonify({'authenticated': False}), 401
+        return jsonify({'success': True, 'authenticated': True, 'name': session['name'], 'role': session['role']})
+    return jsonify({'success': False, 'authenticated': False}), 401
 
 # --- BLOB HELPERS ---
 def _blob_put(pathname: str, body_bytes: bytes, content_type: str, token: str):
