@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentation Viewer - Training PRO</title>
+    <link rel="stylesheet" href="modern-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="fade-in">
+    <nav>
+        <ul>
+            <li><span class="site-title">Training PRO</span></li>
+            <li><a href="student_dashboard.html" class="btn btn-secondary">📚 Dashboard</a></li>
+            <li class="nav-right">
+                <span class="student-name">Welcome, <span id="studentName">Student</span></span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="ppt-container slide-in">
+        <div id="pptViewer"></div>
+        <div class="ppt-controls">
+            <button id="prevSlide" class="btn btn-secondary">⬅️ Previous</button>
+            <span id="slideInfo">🎯 Slide <span id="currentSlide">0</span> of <span id="totalSlides">0</span></span>
+            <button id="nextSlide" class="btn btn-secondary">Next ➡️</button>
+
+            <div class="zoom-controls">
+                <button id="zoomOut" class="zoom-btn">🔍-</button>
+                <span id="zoomLevel">100%</span>
+                <button id="zoomIn" class="zoom-btn">🔍+</button>
+                <button id="fitWidth" class="fit-btn">📐 Fit Width</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="progress-info">
+        <div>You've viewed <span id="progressText">0.0</span>% of this presentation</div>
+        <progress id="progressBar" value="0" max="100"></progress>
+        
+        <div class="control-buttons">
+            <button class="btn reset" id="resetProgress">Reset Progress</button>
+            <button class="btn" id="jumpToMax">Continue Viewing</button>
+        </div>
+    </div>
+
+    <script>
+    // Logout function
+    async function logout() {
+        const res = await fetch('/api/logout', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = 'login.html';
+        } else {
+            alert('Logout failed. Please try again.');
+        }
+    }
+
+    // Load student name
+    async function loadStudentName() {
+        try {
+            const res = await fetch('/api/get_session_info', {credentials: 'include'});
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.name) {
+                    document.getElementById('studentName').textContent = data.name;
+                }
+            }
+        } catch (error) {
+            console.error("Error loading student name:", error);
+        }
+    }
+    
+    // Load student name when page loads
+    loadStudentName();
+    </script>
+    <script src="ppt_script.js"></script>
+</body>
+</html>

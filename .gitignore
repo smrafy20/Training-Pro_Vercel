@@ -1,0 +1,104 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.dll
+*.a
+*.lib
+*.manifest
+*.spec
+.eggs/
+*.egg-info/
+*.dist-info/
+build/
+dist/
+pip-wheel-metadata/
+
+# Byte-compiled / optimized / DLL files
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# Environment variables (keep example files)
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Flask/instance folder
+instance/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+.cache/
+htmlcov/
+
+# Logs
+logs/
+*.log
+
+# Type checkers / linters / tools
+.mypy_cache/
+.ruff_cache/
+.nox/
+.tox/
+coverage.xml
+.hypothesis/
+
+# SQLite / local DBs
+*.sqlite3
+*.db
+*.sqlite
+*.sqlite-journal
+
+# --- Project uploads & generated assets ---
+# Avoid committing user-uploaded or generated media
+uploads/
+uploads_audio/
+uploads_docx/
+uploads_pdf/
+uploads_ppt/
+uploads_ppt_images/
+uploads_*/
+uploads*/
+
+# If you want to keep folder structure, create placeholder .gitkeep files manually and remove these lines.
+
+# --- Node/Frontend tooling (if added later) ---
+node_modules/
+.pnp.cjs
+.pnp.loader.mjs
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Editors & IDEs ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# --- Documentation builds ---
+site/
+docs/_build/
+
+# --- Misc ---
+*.swp
+*.swo
+*.tmp
+~$*

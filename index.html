@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player - Training PRO</title>
+    <link rel="stylesheet" href="modern-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="fade-in">
+    <nav>
+        <ul>
+            <li><span class="site-title">Training PRO</span></li>
+            <li><a href="student_dashboard.html" class="btn btn-secondary">📚 Dashboard</a></li>
+            <li class="nav-right">
+                <span class="student-name">Welcome, <span id="studentName">Student</span></span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="main-container slide-in">
+        <div class="video-container">
+            <video id="myVideo" controls>
+                <source id="videoSource" src="" type="video/mp4">
+                Your browser doesn't support the video tag.
+            </video>
+        </div>
+
+        <div class="progress-info slide-in">
+            <div>🎬 You've watched <span id="progressText">0.0</span>% of this video</div>
+            <progress id="progressBar" value="0" max="100"></progress>
+
+            <div class="control-buttons">
+                <button class="btn btn-error" id="resetProgress">🔄 Reset Progress</button>
+                <button class="btn btn-success" id="jumpToMax">🎬 Continue Watching</button>
+            </div>
+        </div>
+    </div>    <script>
+    // Load student name
+    async function loadStudentName() {
+        try {
+            const res = await fetch('/api/get_session_info', {credentials: 'include'});
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.name) {
+                    document.getElementById('studentName').textContent = data.name;
+                } else {
+                    console.warn("No student name found in session");
+                }
+            }
+        } catch (error) {
+            console.error("Error loading student name:", error);
+        }
+    }
+    
+    // Logout function
+    async function logout() {
+        const res = await fetch('/api/logout', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = 'login.html';
+        } else {
+            alert('Logout failed. Please try again.');
+        }
+    }
+
+    // Set video source based on query param
+    function getQueryParam(name) {
+        const url = new URL(window.location.href);
+        return url.searchParams.get(name);
+    }    const videoFile = getQueryParam('video') || 'TP.mp4';
+    document.getElementById('videoSource').src = '/uploads/' + videoFile;
+    document.getElementById('myVideo').load();
+    
+    // Load student name when page loads
+    loadStudentName();
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>

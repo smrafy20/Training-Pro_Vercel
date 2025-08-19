@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - Training PRO</title>
+    <link rel="stylesheet" href="modern-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="fade-in">
+    <nav>
+        <ul>
+            <li><span class="site-title">Training PRO</span></li>
+            <li style="text-align: center;">
+                <button onclick="backToCourses()" class="back-btn">📚 COURSES</button>
+            </li>
+            <li class="nav-right">
+                <span class="student-name">Welcome, <span id="studentName">Student</span></span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="main-container fade-in">
+        <div class="dashboard-header">
+            <h1>Student Learning Dashboard</h1>
+            <p class="welcome-message">📖 Course: <span id="currentCourseName">Loading...</span></p>
+        </div>
+
+        <!-- Videos Section -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">🎬 Video Content</h2>
+                <p class="card-subtitle">Interactive video lessons</p>
+            </div>
+            <table id="videosTable">
+                <thead>
+                    <tr><th>📁 File Name</th><th>📋 Type</th><th>📊 Progress</th><th>👨‍🏫 Instructor</th><th>⚡ Action</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- PDFs Section -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">📄 PDF Documents</h2>
+                <p class="card-subtitle">Reading materials and guides</p>
+            </div>
+            <table id="pdfsTable">
+                <thead>
+                    <tr><th>📁 File Name</th><th>📋 Type</th><th>📖 Last Page</th><th>👨‍🏫 Instructor</th><th>⚡ Action</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- DOCX Section -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">📝 Word Documents</h2>
+                <p class="card-subtitle">Text documents and assignments</p>
+            </div>
+            <table id="docxTable">
+                <thead>
+                    <tr><th>📁 File Name</th><th>📋 Type</th><th>📊 Progress</th><th>👨‍🏫 Instructor</th><th>⚡ Action</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- PPT Section -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">🎯 Presentations</h2>
+                <p class="card-subtitle">Slide presentations and lectures</p>
+            </div>
+            <table id="pptTable">
+                <thead>
+                    <tr><th>📁 File Name</th><th>📋 Type</th><th>🎯 Current Slide</th><th>👨‍🏫 Instructor</th><th>⚡ Action</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Audio Section -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">🎵 Audio Content</h2>
+                <p class="card-subtitle">Audio lectures and podcasts</p>
+            </div>
+            <table id="audioTable">
+                <thead>
+                    <tr><th>📁 File Name</th><th>📋 Type</th><th>📊 Progress</th><th>👨‍🏫 Instructor</th><th>⚡ Action</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+    let studentName = null;
+    let selectedCourseId = null;
+    
+    async function logout() {
+        const res = await fetch('/api/logout', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = 'login.html';
+        } else {
+            alert('Logout failed. Please try again.');
+        }
+    }
+    
+    function backToCourses() {
+        window.location.href = 'course_selection.html';
+    }
+    
+    async function loadStudentInfo() {
+        // Try to get from session (via backend)
+        try {
+            const res = await fetch('/api/get_session_info', {credentials: 'include'});
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.name) {
+                    studentName = data.name;
+                    // Update the UI with the student name
+                    document.getElementById('studentName').textContent = studentName;
+                    
+                    // Get selected course from session storage
+                    selectedCourseId = sessionStorage.getItem('selectedCourseId');
+                    if (!selectedCourseId) {
+                        // Redirect to course selection if no course is selected
+                        window.location.href = 'course_selection.html';
+                        return;
+                    }
+                    
+                    // Load course info
+                    await loadCourseInfo(selectedCourseId);
+                      // Now load all the materials
+                    loadVideos();
+                    loadPdfs();
+                    loadDocxFiles();
+                    loadPptFiles(); // Load PPT files
+                    loadAudioFiles(); // Load audio files
+                } else {
+                    // Redirect if not authenticated
+                    window.location.href = 'login.html';
+                }
+            } else {
+                window.location.href = 'login.html';
+            }
+        } catch (error) {
+            console.error('Error loading student info:', error);
+            window.location.href = 'login.html';
+        }
+    }
+    
+    async function loadCourseInfo(courseId) {
+        try {
+            const res = await fetch(`/api/courses/${courseId}`, {credentials: 'include'});
+            const data = await res.json();
+            if (data.success && data.course) {
+                document.getElementById('currentCourseName').textContent = data.course.name;
+            } else {
+                document.getElementById('currentCourseName').textContent = 'Unknown Course';
+            }
+        } catch (error) {
+            console.error('Error loading course info:', error);
+            document.getElementById('currentCourseName').textContent = 'Error loading course';
+        }
+    }
+
+    async function loadVideos() {
+        if (!studentName) return;
+        if (!selectedCourseId) return;
+
+        const courseParam = `?courseId=${selectedCourseId}`;
+        const res = await fetch(`/api/videos${courseParam}`, {credentials: 'include'});
+        const videos = await res.json();
+        const tbody = document.querySelector('#videosTable tbody');
+        tbody.innerHTML = '';
+        
+        if (videos.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" style="text-align: center;">No videos available for this course</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+        
+        for (const v of videos) {
+            let progress = 0;
+            try {
+                const progRes = await fetch(`/api/progress/${studentName}/${v.filename}`, {credentials: 'include'});
+                if(progRes.ok){
+                    const progData = await progRes.json();
+                    progress = progData.progress || 0;
+                }
+            } catch (e) { console.error("Error fetching video progress:", e); }
+            const tr = document.createElement('tr');
+            const instructorName = v.instructor_name || 'Unknown';
+            tr.innerHTML = `<td>${v.filename}</td><td>${v.filetype}</td><td>${progress.toFixed(1)}%</td><td>${instructorName}</td><td><button class='btn btn-primary' onclick="window.location.href='index.html?video=${encodeURIComponent(v.filename)}'" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">🎬 Watch</button></td>`;
+            tbody.appendChild(tr);
+        }
+    }
+
+    async function loadPdfs() {
+        if (!studentName) return;
+        if (!selectedCourseId) return;
+
+        const courseParam = `?courseId=${selectedCourseId}`;
+        const res = await fetch(`/api/pdfs${courseParam}`, {credentials: 'include'});
+        const pdfs = await res.json();
+        const tbody = document.querySelector('#pdfsTable tbody');
+        tbody.innerHTML = '';
+        
+        if (pdfs.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" style="text-align: center;">No PDFs available for this course</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+        
+        for (const p of pdfs) {
+            let progressText = "Not Started";
+            try {
+                const progRes = await fetch(`/api/progress_pdf/${studentName}/${p.filename}`, {credentials: 'include'});
+                if(progRes.ok){
+                    const progData = await progRes.json();
+                    if (progData && progData.currentPage) {
+                        progressText = `Page ${progData.currentPage} (${progData.maxProgressPercent ? progData.maxProgressPercent.toFixed(1) : '0.0'}%)`;
+                    }
+                }
+            } catch (e) { console.error("Error fetching PDF progress:", e); }
+            const tr = document.createElement('tr');
+            const instructorName = p.instructor_name || 'Unknown';
+            tr.innerHTML = `<td>${p.filename}</td><td>${p.filetype}</td><td>${progressText}</td><td>${instructorName}</td><td><button class='btn btn-primary' onclick="window.location.href='pdf_tracker.html?pdf=${encodeURIComponent(p.filename)}'" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">📄 View</button></td>`;
+            tbody.appendChild(tr);
+        }
+    }    async function loadDocxFiles() {
+        if (!studentName) return;
+        if (!selectedCourseId) return;
+
+        const courseParam = `?courseId=${selectedCourseId}`;
+        const res = await fetch(`/api/docx_files${courseParam}`, {credentials: 'include'});
+        const docxFiles = await res.json();
+        const tbody = document.querySelector('#docxTable tbody');
+        tbody.innerHTML = '';
+        
+        if (docxFiles.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" style="text-align: center;">No DOCX files available for this course</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+        
+        for (const d of docxFiles) {
+            let progressText = "Not Started";
+            let progressPercent = 0;
+            try {
+                const progRes = await fetch(`/api/progress_docx/${studentName}/${d.filename}`, {credentials: 'include'});
+                if(progRes.ok){
+                    const progData = await progRes.json();
+                    if (progData && progData.maxProgressPercent) {
+                        progressPercent = progData.maxProgressPercent;
+                        progressText = `${progData.maxProgressPercent.toFixed(1)}%`;
+                    }
+                }
+            } catch (e) { console.error("Error fetching DOCX progress:", e); }
+            
+            const tr = document.createElement('tr');
+            const instructorName = d.instructor_name || 'Unknown';
+            // Create action buttons based on progress
+            let actionButtons = `<button class='btn btn-primary' onclick="window.location.href='docx_tracker.html?docx=${encodeURIComponent(d.filename)}'" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">📝 View</button>`;
+            
+            tr.innerHTML = `<td>${d.filename}</td><td>${d.filetype}</td><td>${progressText}</td><td>${instructorName}</td><td>${actionButtons}</td>`;
+            tbody.appendChild(tr);
+        }
+    }
+
+    async function loadPptFiles() {
+        if (!studentName) return;
+        if (!selectedCourseId) return;
+
+        const courseParam = `?courseId=${selectedCourseId}`;
+        const res = await fetch(`/api/ppts${courseParam}`, {credentials: 'include'});
+        const ppts = await res.json();
+        const tbody = document.querySelector('#pptTable tbody');
+        tbody.innerHTML = '';
+
+        if (ppts.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" style="text-align: center;">No PPT files available for this course</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+
+        for (const p of ppts) {
+            let progressText = "Not Started";
+            try {
+                const progRes = await fetch(`/api/progress_ppt/${studentName}/${p.filename}`, {credentials: 'include'});
+                if(progRes.ok){
+                    const progData = await progRes.json();
+                    if (progData && progData.currentSlide) {
+                        progressText = `Slide ${progData.currentSlide} (${progData.maxProgressPercent ? progData.maxProgressPercent.toFixed(1) : '0.0'}%)`;
+                    }
+                }
+            } catch (e) { console.error("Error fetching PPT progress:", e); }
+            const tr = document.createElement('tr');
+            const instructorName = p.instructor_name || 'Unknown';
+            tr.innerHTML = `<td>${p.filename}</td><td>${p.filetype}</td><td>${progressText}</td><td>${instructorName}</td><td><button class='btn btn-primary' onclick="window.location.href='ppt_tracker.html?ppt=${encodeURIComponent(p.filename)}'" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">🎯 View</button></td>`;
+            tbody.appendChild(tr);
+        }
+    }
+
+    async function loadAudioFiles() {
+        if (!studentName) return;
+        if (!selectedCourseId) return;
+
+        const courseParam = `?courseId=${selectedCourseId}`;
+        const res = await fetch(`/api/audio_files${courseParam}`, {credentials: 'include'});
+        const audioFiles = await res.json();
+        const tbody = document.querySelector('#audioTable tbody');
+        tbody.innerHTML = '';
+        
+        if (audioFiles.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" style="text-align: center;">No audio files available for this course</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+        
+        for (const a of audioFiles) {
+            let progress = 0;
+            try {
+                const progRes = await fetch(`/api/progress_audio/${studentName}/${a.filename}`, {credentials: 'include'});
+                if(progRes.ok){
+                    const progData = await progRes.json();
+                    progress = progData.progress || 0;
+                }
+            } catch (e) { console.error("Error fetching audio progress:", e); }
+            const tr = document.createElement('tr');
+            const instructorName = a.instructor_name || 'Unknown';
+            tr.innerHTML = `<td>${a.filename}</td><td>${a.filetype}</td><td>${progress.toFixed(1)}%</td><td>${instructorName}</td><td><button class='btn btn-primary' onclick="window.location.href='audio_tracker.html?audio=${encodeURIComponent(a.filename)}'" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">🎵 Listen</button></td>`;
+            tbody.appendChild(tr);
+        }
+    }    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            loadVideos();
+            loadPdfs();
+            loadDocxFiles();
+            loadPptFiles(); // Load PPT files
+            loadAudioFiles(); // Load audio files
+        }
+    });
+    
+    // Initialize everything on page load
+    loadStudentInfo();
+    </script>
+</body>
+</html>

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instructor Dashboard - Training PRO</title>
+    <link rel="stylesheet" href="modern-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .course-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: var(--space-6);
+            margin-top: var(--space-8);
+        }
+
+        .course-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-xl);
+            padding: var(--space-6);
+            cursor: pointer;
+            transition: var(--transition-normal);
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .course-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, var(--success-500), var(--success-600));
+        }
+
+        .course-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-2xl);
+            border-color: var(--success-200);
+        }
+
+        .course-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: var(--space-3);
+            color: var(--secondary-800);
+            font-family: var(--font-display);
+        }
+
+        .course-instructor {
+            font-size: 0.875rem;
+            color: var(--secondary-600);
+            margin-bottom: var(--space-2);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .course-instructor::before {
+            content: '👨‍🏫';
+        }
+
+        .course-date {
+            font-size: 0.75rem;
+            color: var(--secondary-500);
+            margin-bottom: var(--space-3);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .course-date::before {
+            content: '📅';
+        }
+
+        .course-stats {
+            font-size: 0.875rem;
+            color: var(--success-700);
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--success-50), var(--success-100));
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-lg);
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            border: 1px solid var(--success-200);
+        }
+
+        .course-stats::before {
+            content: '📁';
+        }
+
+        .action-buttons {
+            margin-bottom: var(--space-8);
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+            color: white;
+            padding: var(--space-4) var(--space-8);
+            border: none;
+            border-radius: var(--radius-lg);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-normal);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '➕';
+            font-size: 1.125rem;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-xl);
+            background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+        }
+
+        .loading-message {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: var(--secondary-600);
+            font-size: 1.125rem;
+            padding: var(--space-12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-3);
+        }
+
+        .loading-message::before {
+            content: '⏳';
+            font-size: 1.5rem;
+        }
+    </style>
+</head>
+<body class="fade-in">
+    <nav>
+        <ul>
+            <li><span class="site-title">Training PRO</span></li>
+            <li class="nav-right">
+                <span class="instructor-name">Welcome, <span id="instructorName">Instructor</span></span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="main-container fade-in">
+        <div class="dashboard-header">
+            <h1>Instructor Control Center</h1>
+            <p class="welcome-message">🎓 Manage your courses and track student progress</p>
+        </div>
+
+        <div class="action-buttons slide-in">
+            <button onclick="createCourse()" class="btn-primary">Create New Course</button>
+        </div>
+
+        <div id="courseGrid" class="course-grid slide-in">
+            <!-- Course cards will be added here dynamically -->
+            <div class="loading-message">Loading courses...</div>
+        </div>
+    </div>
+    
+    <script>
+    let courses = [];
+    
+    // Load instructor info and check authentication
+    async function loadInstructorInfo() {
+        try {
+            const res = await fetch('/api/get_session_info', {credentials: 'include'});
+            const data = await res.json();
+            
+            if (data.success && data.role === 'instructor') {
+                document.getElementById('instructorName').textContent = data.name;
+            } else {
+                // Redirect to login if not authenticated as instructor
+                alert('Please login as instructor first.');
+                window.location.href = 'login.html';
+            }
+        } catch (error) {
+            console.error('Error checking auth:', error);
+            alert('Authentication error. Please login again.');
+            window.location.href = 'login.html';
+        }
+    }
+    
+    // Load available courses
+    async function loadCourses() {
+        try {
+            const res = await fetch('/api/courses', {credentials: 'include'});
+            courses = await res.json();
+            
+            const courseGrid = document.getElementById('courseGrid');
+            courseGrid.innerHTML = ''; // Clear loading message
+            
+            if (courses.length === 0) {
+                courseGrid.innerHTML = '<p>No courses available yet. Create your first course to get started!</p>';
+                return;
+            }
+            
+            // Load file counts for each course
+            await loadCourseStats();
+            
+            courses.forEach(course => {
+                const courseCard = document.createElement('div');
+                courseCard.className = 'course-card';
+                courseCard.onclick = () => enterCourse(course.id, course.name);
+                
+                const courseDate = new Date(course.created_at);
+                const formattedDate = courseDate.toLocaleDateString();
+                
+                const fileCount = course.fileCount || 0;
+                
+                courseCard.innerHTML = `
+                    <div class="course-name">${course.name}</div>
+                    <div class="course-instructor">Created by: ${course.instructor}</div>
+                    <div class="course-date">Created: ${formattedDate}</div>
+                    <div class="course-stats">${fileCount} files uploaded</div>
+                `;
+                
+                courseGrid.appendChild(courseCard);
+            });
+        } catch (error) {
+            console.error('Error loading courses:', error);
+            document.getElementById('courseGrid').innerHTML = '<p>Error loading courses. Please refresh the page.</p>';
+        }
+    }
+    
+    // Load file statistics for each course
+    async function loadCourseStats() {
+        for (let course of courses) {
+            try {
+                // Count files for this course
+                let totalFiles = 0;
+                
+                // Count videos
+                const videoRes = await fetch(`/api/videos?courseId=${course.id}`, {credentials: 'include'});
+                const videos = await videoRes.json();
+                totalFiles += videos.length;
+                
+                // Count PDFs
+                const pdfRes = await fetch(`/api/pdfs?courseId=${course.id}`, {credentials: 'include'});
+                const pdfs = await pdfRes.json();
+                totalFiles += pdfs.length;
+                
+                // Count DOCX files
+                const docxRes = await fetch(`/api/docx_files?courseId=${course.id}`, {credentials: 'include'});
+                const docxFiles = await docxRes.json();
+                totalFiles += docxFiles.length;
+                
+                // Count PPT files
+                const pptRes = await fetch(`/api/ppts?courseId=${course.id}`, {credentials: 'include'});
+                const pptFiles = await pptRes.json();
+                totalFiles += pptFiles.length;
+                
+                // Count Audio files
+                const audioRes = await fetch(`/api/audio_files?courseId=${course.id}`, {credentials: 'include'});
+                const audioFiles = await audioRes.json();
+                totalFiles += audioFiles.length;
+                
+                course.fileCount = totalFiles;
+            } catch (error) {
+                console.error(`Error loading stats for course ${course.id}:`, error);
+                course.fileCount = 0;
+            }
+        }
+    }
+    
+    // Handle course selection - enter course management
+    function enterCourse(courseId, courseName) {
+        // Store the selected course info in session storage
+        sessionStorage.setItem('selectedCourseId', courseId);
+        sessionStorage.setItem('selectedCourseName', courseName);
+        window.location.href = 'instructor.html';
+    }
+    
+    // Redirect to course creation page
+    function createCourse() {
+        window.location.href = 'create_course.html';
+    }
+    
+    function logout() {
+        fetch('/api/logout', {
+            method: 'POST',
+            credentials: 'include'
+        }).then(() => {
+            window.location.href = 'login.html';
+        });
+    }
+    
+    // Load everything on page load
+    loadInstructorInfo();
+    loadCourses();
+    </script>
+</body>
+</html>

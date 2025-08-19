@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Showcase - Training PRO</title>
+    <link rel="stylesheet" href="modern-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="fade-in">
+    <nav>
+        <ul>
+            <li><span class="site-title">Training PRO</span></li>
+            <li><a href="login.html" class="btn btn-secondary">🏠 Home</a></li>
+            <li class="nav-right">
+                <span class="instructor-name">Welcome, <span>Demo User</span></span>
+                <button class="logout-btn">Logout</button>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="main-container fade-in">
+        <div class="dashboard-header">
+            <h1>Training PRO - UI Showcase</h1>
+            <p class="welcome-message">🎨 Professional Learning Management System</p>
+        </div>
+
+        <!-- Button Showcase -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">🎯 Button Components</h2>
+                <p class="card-subtitle">Professional button styles with hover effects</p>
+            </div>
+            <div class="control-buttons">
+                <button class="btn btn-primary">Primary Action</button>
+                <button class="btn btn-secondary">Secondary Action</button>
+                <button class="btn btn-success">Success Action</button>
+                <button class="btn btn-warning">Warning Action</button>
+                <button class="btn btn-error">Error Action</button>
+            </div>
+        </div>
+
+        <!-- Form Showcase -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">📝 Form Elements</h2>
+                <p class="card-subtitle">Modern form styling with focus states</p>
+            </div>
+            <form style="max-width: none; padding: 0; background: none; box-shadow: none; border: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+                    <div>
+                        <label for="demo-name">Full Name</label>
+                        <input type="text" id="demo-name" placeholder="Enter your name" value="John Doe">
+                    </div>
+                    <div>
+                        <label for="demo-email">Email Address</label>
+                        <input type="email" id="demo-email" placeholder="Enter your email" value="john@example.com">
+                    </div>
+                </div>
+                <div class="radio-group">
+                    <label>User Role</label>
+                    <label><input type="radio" name="demo-role" value="instructor" checked> 🎓 Instructor</label>
+                    <label><input type="radio" name="demo-role" value="student"> 📚 Student</label>
+                </div>
+            </form>
+        </div>
+
+        <!-- Table Showcase -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">📊 Data Tables</h2>
+                <p class="card-subtitle">Clean table design with hover effects</p>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>📁 File Name</th>
+                        <th>📋 Type</th>
+                        <th>📊 Progress</th>
+                        <th>👨‍🏫 Instructor</th>
+                        <th>⚡ Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Introduction to AI</td>
+                        <td>PDF</td>
+                        <td>85%</td>
+                        <td>Dr. Smith</td>
+                        <td><button class="btn btn-primary" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">View</button></td>
+                    </tr>
+                    <tr>
+                        <td>Machine Learning Basics</td>
+                        <td>Video</td>
+                        <td>60%</td>
+                        <td>Prof. Johnson</td>
+                        <td><button class="btn btn-primary" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">Watch</button></td>
+                    </tr>
+                    <tr>
+                        <td>Data Science Presentation</td>
+                        <td>PPT</td>
+                        <td>100%</td>
+                        <td>Dr. Wilson</td>
+                        <td><button class="btn btn-success" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">Complete</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Progress Showcase -->
+        <div class="progress-info slide-in">
+            <div>📖 You've completed <span style="color: var(--success-600); font-weight: 700;">78.5</span>% of your learning journey</div>
+            <progress value="78.5" max="100"></progress>
+            
+            <div class="control-buttons">
+                <button class="btn btn-error">🔄 Reset Progress</button>
+                <button class="btn btn-success">📖 Continue Learning</button>
+            </div>
+        </div>
+
+        <!-- Media Container Showcase -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">🎬 Media Players</h2>
+                <p class="card-subtitle">Professional media container styling</p>
+            </div>
+            <div class="video-container" style="margin: 0;">
+                <div style="background: var(--secondary-900); color: white; padding: var(--space-8); text-align: center; border-radius: var(--radius-lg);">
+                    <h3 style="color: white; margin: 0;">🎥 Video Player Area</h3>
+                    <p style="color: var(--secondary-300); margin: var(--space-2) 0 0;">Professional video player with custom controls</p>
+                </div>
+                <div class="pdf-controls">
+                    <button class="btn btn-secondary">⬅️ Previous</button>
+                    <span>🎯 Slide 5 of 20</span>
+                    <button class="btn btn-secondary">Next ➡️</button>
+                    <div class="zoom-controls">
+                        <button class="zoom-btn">🔍-</button>
+                        <span>100%</span>
+                        <button class="zoom-btn">🔍+</button>
+                        <button class="fit-btn">📐 Fit Width</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Color Palette Showcase -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">🎨 Design System</h2>
+                <p class="card-subtitle">Professional color palette and typography</p>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4);">
+                <div style="text-align: center;">
+                    <div style="background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); height: 60px; border-radius: var(--radius-lg); margin-bottom: var(--space-2);"></div>
+                    <p style="margin: 0; font-weight: 600; color: var(--secondary-700);">Primary Colors</p>
+                    <p style="margin: 0; font-size: 0.75rem; color: var(--secondary-500);">Modern Blue Gradient</p>
+                </div>
+                <div style="text-align: center;">
+                    <div style="background: linear-gradient(135deg, var(--success-500), var(--success-600)); height: 60px; border-radius: var(--radius-lg); margin-bottom: var(--space-2);"></div>
+                    <p style="margin: 0; font-weight: 600; color: var(--secondary-700);">Success Colors</p>
+                    <p style="margin: 0; font-size: 0.75rem; color: var(--secondary-500);">Fresh Green Tones</p>
+                </div>
+                <div style="text-align: center;">
+                    <div style="background: linear-gradient(135deg, var(--warning-500), var(--warning-600)); height: 60px; border-radius: var(--radius-lg); margin-bottom: var(--space-2);"></div>
+                    <p style="margin: 0; font-weight: 600; color: var(--secondary-700);">Warning Colors</p>
+                    <p style="margin: 0; font-size: 0.75rem; color: var(--secondary-500);">Vibrant Orange</p>
+                </div>
+                <div style="text-align: center;">
+                    <div style="background: linear-gradient(135deg, var(--error-500), var(--error-600)); height: 60px; border-radius: var(--radius-lg); margin-bottom: var(--space-2);"></div>
+                    <p style="margin: 0; font-weight: 600; color: var(--secondary-700);">Error Colors</p>
+                    <p style="margin: 0; font-size: 0.75rem; color: var(--secondary-500);">Professional Red</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Typography Showcase -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">✍️ Typography</h2>
+                <p class="card-subtitle">Professional font hierarchy</p>
+            </div>
+            <div style="display: grid; gap: var(--space-4);">
+                <div>
+                    <h1 style="margin: 0;">Main Heading (Poppins)</h1>
+                    <p style="margin: 0; color: var(--secondary-500);">Large, bold headings for maximum impact</p>
+                </div>
+                <div>
+                    <h2 style="margin: 0;">Section Heading</h2>
+                    <p style="margin: 0; color: var(--secondary-500);">Clear section organization</p>
+                </div>
+                <div>
+                    <h3 style="margin: 0;">Subsection Heading</h3>
+                    <p style="margin: 0; color: var(--secondary-500);">Perfect for content hierarchy</p>
+                </div>
+                <div>
+                    <p style="margin: 0; font-family: var(--font-primary);">Body Text (Inter) - Optimized for readability and professional appearance. Clean, modern typography that enhances the user experience.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; margin-top: var(--space-12); padding: var(--space-8); color: var(--secondary-500);">
+            <h3 style="color: var(--secondary-700);">🚀 Training PRO</h3>
+            <p>Professional Learning Management System with Modern UI Design</p>
+            <p style="font-size: 0.875rem;">Built with love for exceptional user experience</p>
+        </div>
+    </div>
+
+    <script>
+        // Add some interactive demo functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate progress bar
+            const progressBar = document.querySelector('progress');
+            let currentValue = 0;
+            const targetValue = 78.5;
+            
+            const animateProgress = () => {
+                if (currentValue < targetValue) {
+                    currentValue += 0.5;
+                    progressBar.value = currentValue;
+                    requestAnimationFrame(animateProgress);
+                }
+            };
+            
+            setTimeout(animateProgress, 1000);
+            
+            // Add click handlers for demo buttons
+            document.querySelectorAll('.btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    if (!this.textContent.includes('Logout')) {
+                        e.preventDefault();
+                        this.style.transform = 'scale(0.95)';
+                        setTimeout(() => {
+                            this.style.transform = '';
+                        }, 150);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

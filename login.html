@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Training PRO</title>
+    <link rel="stylesheet" href="modern-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="fade-in">
+    <nav>
+        <ul>
+            <li><span class="site-title">Training PRO</span></li>
+            <li></li> <!-- Empty cell for spacing -->
+            <li></li> <!-- Empty cell for spacing -->
+        </ul>
+    </nav>
+
+    <div class="main-container fade-in">
+        <div class="dashboard-header">
+            <h1>Welcome to Training PRO</h1>
+            <p class="welcome-message">Your Professional Learning Management System</p>
+        </div>
+
+        <form id="loginForm" class="slide-in">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" placeholder="Enter your full name" required>
+
+            <div class="radio-group">
+                <label>Select Your Role</label>
+                <label><input type="radio" name="role" value="instructor" required> 🎓 Instructor</label>
+                <label><input type="radio" name="role" value="student" required> 📚 Student</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Sign In</button>
+        </form>
+    </div>
+
+    <script>    document.getElementById('loginForm').onsubmit = async function(e) {
+        e.preventDefault();
+        const name = document.getElementById('name').value;
+        const role = document.querySelector('input[name="role"]:checked').value;
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'include',
+            body: JSON.stringify({name, role})
+        });
+        const data = await res.json();
+        if (data.success) {
+            if (role === 'instructor') window.location.href = 'instructor_dashboard.html';
+            else window.location.href = 'course_selection.html';  // Send students to course selection first
+        } else {
+            alert('Login failed: ' + data.message);
+        }
+    };
+    </script>
+</body>
+</html> 

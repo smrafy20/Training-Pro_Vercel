@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Reader - Training PRO</title>
+    <link rel="stylesheet" href="modern-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Include docx-preview library -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.7.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.1.18/dist/docx-preview.js"></script>
+</head>
+<body class="fade-in">
+    <nav>
+        <ul>
+            <li><span class="site-title">Training PRO</span></li>
+            <li class="nav-right">
+                <span class="student-name">Welcome, <span id="studentName">Student</span></span>
+                <button onclick="goBack()" class="btn btn-secondary">📚 Back to Dashboard</button>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="main-container slide-in">
+        <div class="viewer-container" id="viewer-container" style="display: flex;">
+            <div class="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+                <div class="progress-text" id="progress-text">0%</div>
+            </div>
+            <div class="document-viewer" id="document-viewer">
+                <div class="loading">📄 Loading document...</div>
+            </div>
+        </div>
+
+        <div class="progress-info slide-in">
+            <div>📖 You've read <span id="progressDisplayText">0.0</span>% of this document</div>
+            <div class="control-buttons">
+                <button class="btn btn-error" id="resetProgress">🔄 Reset Progress</button>
+                <button class="btn btn-success" id="jumpToMax">📖 Continue Reading</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Get filename from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const filename = urlParams.get('docx');
+        
+        if (!filename) {
+            alert('No DOCX file specified');
+            goBack();
+            return;
+        }
+
+        // Title removed for better space utilization
+
+        // Get student name
+        let studentName = null;
+          // Elements
+        const docViewer = document.getElementById('document-viewer');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const progressDisplayText = document.getElementById('progressDisplayText');
+        const resetButton = document.getElementById('resetProgress');
+        const jumpButton = document.getElementById('jumpToMax');
+
+        // Variables
+        let maxScrollPercentage = 0;
+
+        // Initialize
+        initializeViewer();
+
+        async function initializeViewer() {
+            try {
+                // Get student name from session
+                const sessionRes = await fetch('/api/get_session_info', {credentials: 'include'});
+                if (sessionRes.ok) {
+                    const sessionData = await sessionRes.json();
+                    if (sessionData.success && sessionData.name) {
+                        studentName = sessionData.name;
+                        document.getElementById('studentName').textContent = studentName;
+                    }
+                }
+                
+                if (!studentName) {
+                    studentName = prompt('Enter your name to track progress:');
+                    if (studentName) {
+                        document.getElementById('studentName').textContent = studentName;
+                    }
+                }
+
+                if (!studentName) {
+                    alert("Student name is required to track progress.");
+                    goBack();
+                    return;
+                }
+
+                // Load previous progress
+                await loadProgress();
+                
+                // Load the DOCX file
+                await loadDocxFile();
+                
+            } catch (error) {
+                console.error('Error initializing viewer:', error);
+                docViewer.innerHTML = `<div class="error">Error initializing viewer: ${error.message}</div>`;
+            }
+        }
+
+        async function loadProgress() {
+            try {
+                const res = await fetch(`/api/progress_docx/${studentName}/${filename}`, {credentials: 'include'});
+                if (res.ok) {
+                    const data = await res.json();
+                    maxScrollPercentage = data.maxProgressPercent || 0;
+                    updateProgressBar(maxScrollPercentage);
+                }
+            } catch (e) {
+                console.error("Error loading progress:", e);
+            }
+        }
+
+        async function saveProgress() {
+            try {
+                await fetch(`/api/progress_docx/${studentName}/${filename}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        maxProgressPercent: maxScrollPercentage
+                    })
+                });
+            } catch (e) {
+                console.error("Error saving progress:", e);
+            }
+        }
+
+        // Load DOCX file and render it
+        async function loadDocxFile() {
+            try {
+                // Fetch the DOCX file
+                const response = await fetch(`/uploads_docx/${filename}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to load DOCX file: ${response.status}`);
+                }
+                
+                // Create an ArrayBuffer from the response
+                const arrayBuffer = await response.arrayBuffer();
+                
+                // Clear the viewer
+                docViewer.innerHTML = '';
+                
+                // Create a container for the DOCX preview
+                const docxContainer = document.createElement('div');
+                docxContainer.className = 'docx-container';
+                docViewer.appendChild(docxContainer);
+                
+                // Render the DOCX using docx-preview in continuous mode
+                await docx.renderAsync(arrayBuffer, docxContainer, null, {
+                    className: 'docx',
+                    inWrapper: true,
+                    ignoreHeight: false,
+                    ignoreWidth: false,
+                    renderHeaders: true,
+                    renderFooters: true,
+                    renderFootnotes: true,
+                    renderEndnotes: true
+                });
+                  // Once loaded, setup scroll tracking
+                setupScrollTracking();
+                
+                // If there's previous progress, show option to continue
+                if (maxScrollPercentage > 0 && maxScrollPercentage < 100) {
+                    setTimeout(() => {
+                        if (confirm(`You've previously read ${maxScrollPercentage.toFixed(1)}% of this document. Would you like to continue from where you left off?`)) {
+                            jumpButton.click(); // Trigger the continue reading functionality
+                        }
+                    }, 1000); // Small delay to ensure document is fully rendered
+                }
+                
+            } catch (error) {
+                console.error('Error processing DOCX file:', error);
+                docViewer.innerHTML = `<div class="error">Error loading document: ${error.message}</div>`;
+            }
+        }
+
+        // Setup scroll event tracking
+        function setupScrollTracking() {
+            // Add scroll event listener
+            docViewer.addEventListener('scroll', handleScroll);
+        }
+
+        // Handle scroll events to update the progress bar
+        function handleScroll() {
+            const scrollPosition = docViewer.scrollTop;
+            const scrollHeight = docViewer.scrollHeight - docViewer.clientHeight;
+            
+            // Calculate current scroll percentage
+            const currentScrollPercentage = (scrollHeight > 0) 
+                ? Math.round((scrollPosition / scrollHeight) * 100) 
+                : 0;
+            
+            // Update max scroll percentage if current is higher
+            if (currentScrollPercentage > maxScrollPercentage) {
+                maxScrollPercentage = currentScrollPercentage;
+                updateProgressBar(maxScrollPercentage);
+                saveProgress(); // Save progress automatically
+            }
+        }        // Update the progress bar
+        function updateProgressBar(percentage) {
+            // Ensure percentage is between 0 and 100
+            const validPercentage = Math.min(100, Math.max(0, percentage));
+            
+            // Update visual progress bar
+            progressBar.style.width = `${validPercentage}%`;
+            progressText.textContent = `${validPercentage}%`;
+            progressDisplayText.textContent = validPercentage.toFixed(1);
+            
+            // Update progress text color based on percentage
+            updateProgressTextColor(validPercentage);
+        }
+
+        function updateProgressTextColor(percent) {
+            progressDisplayText.classList.remove('progress-text-low', 'progress-text-medium', 'progress-text-high');
+            if (percent < 33) {
+                progressDisplayText.classList.add('progress-text-low');
+            } else if (percent < 66) {
+                progressDisplayText.classList.add('progress-text-medium');
+            } else {
+                progressDisplayText.classList.add('progress-text-high');
+            }
+        }
+
+        // Handle page visibility change to save progress
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                saveProgress();
+            }
+        });        // Save progress before page unload
+        window.addEventListener('beforeunload', () => {
+            saveProgress();
+        });
+
+        // Reset progress button
+        resetButton.addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to reset your reading progress? This will take you back to the beginning.')) {
+                return;
+            }
+            
+            maxScrollPercentage = 0;
+            docViewer.scrollTop = 0;
+            updateProgressBar(0);
+            
+            try {
+                await fetch(`/api/progress_docx/${studentName}/${filename}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        maxProgressPercent: 0
+                    })
+                });
+                alert('Progress has been reset!');
+            } catch (error) {
+                console.error('Error resetting progress:', error);
+                alert('Error resetting progress. Please try again.');
+            }
+        });
+
+        // Continue reading button (jump to max progress)
+        jumpButton.addEventListener('click', () => {
+            if (maxScrollPercentage > 0) {
+                const scrollHeight = docViewer.scrollHeight - docViewer.clientHeight;
+                const targetScrollPosition = (maxScrollPercentage / 100) * scrollHeight;
+                
+                docViewer.scrollTo({
+                    top: targetScrollPosition,
+                    behavior: 'smooth'
+                });
+                
+                // Show feedback message
+                const originalText = jumpButton.textContent;
+                jumpButton.textContent = 'Continuing...';
+                setTimeout(() => {
+                    jumpButton.textContent = originalText;
+                }, 1500);
+            } else {
+                alert('No previous progress found. Start reading from the beginning!');
+            }
+        });
+    });
+
+    function goBack() {
+        window.location.href = 'student_dashboard.html';
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,297 @@
+body {
+    font-family: 'Poppins', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 80px;  /* Add padding for fixed navbar */
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-bottom: 20px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    margin: 0;
+}
+
+/* Navigation styles */
+nav {
+    background-color: #333;
+    color: white;
+    padding: 1em 0;
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+nav ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0 2em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+nav ul li {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Navigation sections */
+nav ul li.nav-center {
+    flex-grow: 1;
+    text-align: center;
+}
+
+nav ul li.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Student name styling */
+.student-name {
+    color: #2196f3;
+    font-weight: 600;
+    font-size: 0.95em;
+    padding: 0.5em 1em;
+    background: rgba(33, 150, 243, 0.1);
+    border-radius: 20px;
+    border: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+.student-name span {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+nav ul li a, nav ul li button {
+    color: white;
+    text-decoration: none;
+    padding: 0.5em 1em;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+nav ul li a:hover, nav ul li button:hover {
+    background-color: #555;
+}
+
+/* Style for logout button */
+nav ul li button.logout-btn {
+    background-color: #d9534f;
+    border: none;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    font-size: 1em;
+}
+
+nav ul li button.logout-btn:hover {
+    background-color: #c9302c;
+}
+
+/* Site title */
+nav .site-title {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #2196f3;
+}
+
+/* Removed h1 styles since heading was removed for better space utilization */
+
+.ppt-container {
+    position: relative;
+    width: 98%;
+    max-width: 1200px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    background-color: white;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    margin: 0 auto;
+}
+
+.ppt-container:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+}
+
+#pptViewer {
+    width: 100%;
+    height: 900px;
+    max-height: 85vh;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background-color: #f9f9f9;
+}
+
+#pptViewer img {
+    display: block;
+    max-width: 100%;
+    height: auto !important;
+    border-bottom: 1px solid #eee;
+}
+
+.ppt-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-top: 1px solid #eee;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+#slideInfo {
+    color: #333;
+    font-weight: 500;
+}
+
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+#zoomLevel {
+    font-weight: 500;
+    color: #333;
+    min-width: 50px;
+    text-align: center;
+}
+
+.zoom-btn {
+    padding: 4px 8px !important;
+    min-width: 30px;
+    font-weight: bold;
+    background-color: #3f51b5;
+}
+
+.fit-btn {
+    padding: 4px 8px !important;
+    font-size: 0.9em;
+    background-color: #2196f3;
+    margin-left: 5px;
+}
+
+.progress-info {
+    margin-top: 20px;
+    width: 98%;
+    max-width: 1200px;
+    text-align: center;
+    font-size: 1.1em;
+    color: #2c3e50;
+    padding: 15px 20px;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+}
+
+#progressBar {
+    width: 100%;
+    height: 16px;
+    margin-top: 10px;
+    appearance: none;
+    border: none;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: #f0f0f0;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* Styling the progress bar fill */
+#progressBar::-webkit-progress-bar {
+    background-color: #f0f0f0;
+    border-radius: 8px;
+}
+
+#progressBar::-webkit-progress-value {
+    background: linear-gradient(90deg, #3f51b5, #2196f3);
+    border-radius: 8px 0 0 8px;
+    transition: width 0.2s ease-out;
+    box-shadow: 0 0 10px rgba(33, 150, 243, 0.5);
+}
+
+#progressBar::-moz-progress-bar {
+    background: linear-gradient(90deg, #3f51b5, #2196f3);
+    border-radius: 8px;
+    transition: width 0.2s ease-out;
+}
+
+#progressText {
+    font-weight: bold;
+    color: #3f51b5;
+    transition: color 0.3s;
+}
+
+.control-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.btn {
+    padding: 8px 16px;
+    background-color: #2196f3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn:hover {
+    background-color: #1976d2;
+    transform: translateY(-2px);
+}
+
+.btn.reset {
+    background-color: #f44336;
+}
+
+.btn.reset:hover {
+    background-color: #d32f2f;
+}
+
+@media (max-width: 840px) {
+    body {
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 70px;
+    }
+
+    .ppt-container, .progress-info {
+        width: 98%;
+    }
+
+    .progress-info {
+        padding: 10px;
+        font-size: 1em;
+    }
+
+    #pptViewer {
+        height: 700px;
+        max-height: 80vh;
+    }
+
+    .ppt-controls {
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px;
+    }
+
+    .zoom-controls {
+        order: -1;
+        margin-left: 0;
+        justify-content: center;
+    }
+}

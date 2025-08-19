@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Management - Training PRO</title>
+    <link rel="stylesheet" href="modern-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="fade-in">
+    <nav>
+        <ul>
+            <li><span class="site-title">Training PRO</span></li>
+            <li style="text-align: center;">
+                <button onclick="goBackToDashboard()" class="back-dashboard-btn">📚 DASHBOARD</button>
+            </li>
+            <li class="nav-right">
+                <span class="instructor-name">Welcome, <span id="instructorName">Instructor</span></span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="main-container fade-in">
+        <div class="dashboard-header">
+            <h1 id="courseTitle">Course Management</h1>
+            <p class="welcome-message">📁 Manage materials for this course</p>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">📤 Upload New Content</h2>
+                <p class="card-subtitle">Add videos, documents, presentations, and audio files</p>
+            </div>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <label for="fileInput">Select File to Upload</label>
+                <input type="file" id="fileInput" accept="video/*,.pdf,.docx,.ppt,.pptx,.mp3,.wav,.ogg">
+                <input type="hidden" id="courseIdInput" name="courseId" value="">
+                <button type="submit" class="btn btn-primary">📤 Upload File</button>
+            </form>
+        </div>
+
+        <!-- Files Table Section -->
+        <div class="card slide-in">
+            <div class="card-header">
+                <h2 class="card-title">📋 Course Materials</h2>
+                <p class="card-subtitle">Manage all uploaded files for this course</p>
+            </div>
+            <table id="filesTable">
+                <thead>
+                    <tr>
+                        <th>📁 File Name</th>
+                        <th>📋 Type</th>
+                        <th>📅 Last Updated</th>
+                        <th>📚 Course</th>
+                        <th>👨‍🏫 Created By</th>
+                        <th>📤 Uploaded By</th>
+                        <th>⚡ Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>    <script>
+    let currentCourseId = '';
+    let currentCourseName = '';
+    let courses = [];
+
+    // Load instructor name and course info on page load
+    async function loadInstructorInfo() {
+        try {
+            const res = await fetch('/api/get_session_info', {credentials: 'include'});
+            const data = await res.json();
+            if (data.success && data.name) {
+                document.getElementById('instructorName').textContent = data.name;
+
+                // Get selected course from session storage
+                currentCourseId = sessionStorage.getItem('selectedCourseId');
+                currentCourseName = sessionStorage.getItem('selectedCourseName');
+
+                if (!currentCourseId) {
+                    // If no course selected, redirect back to dashboard
+                    window.location.href = 'instructor_dashboard.html';
+                    return;
+                }
+
+                // Update page title and course input
+                document.getElementById('courseTitle').textContent = `Course: ${currentCourseName}`;
+                document.getElementById('courseIdInput').value = currentCourseId;
+
+                loadCourses(); // Load courses for reference
+            } else {
+                // Redirect to login if session is invalid
+                window.location.href = 'login.html';
+            }
+        } catch (error) {
+            console.error('Error loading instructor info:', error);
+            window.location.href = 'login.html';
+        }
+    }
+    
+    // Load courses for reference (to get course names for file display)
+    async function loadCourses() {
+        try {
+            const res = await fetch('/api/courses', {credentials: 'include'});
+            courses = await res.json();
+            loadFiles(); // Load files for the current course
+        } catch (error) {
+            console.error('Error loading courses:', error);
+        }
+    }
+
+    // Go back to main instructor dashboard
+    function goBackToDashboard() {
+        window.location.href = 'instructor_dashboard.html';
+    }
+
+    async function logout() {
+        const res = await fetch('/api/logout', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = 'login.html';
+        } else {
+            alert('Logout failed. Please try again.');
+        }    }
+      async function loadFiles() {
+        try {
+            // Create array to store all files
+            const allFiles = [];
+
+            // Only load files for the current course
+            const courseParam = `?courseId=${currentCourseId}`;
+
+            // Fetch videos
+            const videoRes = await fetch(`/api/videos${courseParam}`, {credentials: 'include'});
+            const videos = await videoRes.json();
+            allFiles.push(...videos.map(v => ({...v, deleteEndpoint: `/api/video/${v.filename}`})));
+
+            // Fetch PDFs
+            const pdfRes = await fetch(`/api/pdfs${courseParam}`, {credentials: 'include'});
+            const pdfs = await pdfRes.json();
+            allFiles.push(...pdfs.map(p => ({...p, deleteEndpoint: `/api/pdf/${p.filename}`})));
+              // Fetch DOCX files
+            const docxRes = await fetch(`/api/docx_files${courseParam}`, {credentials: 'include'});
+            const docxFiles = await docxRes.json();
+            allFiles.push(...docxFiles.map(d => ({...d, deleteEndpoint: `/api/docx/${d.filename}`})));
+
+            // Fetch PPT files
+            const pptRes = await fetch(`/api/ppts${courseParam}`, {credentials: 'include'});
+            const pptFiles = await pptRes.json();
+            allFiles.push(...pptFiles.map(p => ({...p, deleteEndpoint: `/api/ppt/${p.filename}`})));
+
+            // Fetch Audio files
+            const audioRes = await fetch(`/api/audio_files${courseParam}`, {credentials: 'include'});
+            const audioFiles = await audioRes.json();
+            allFiles.push(...audioFiles.map(a => ({...a, deleteEndpoint: `/api/audio/${a.filename}`})));
+
+            const tbody = document.querySelector('#filesTable tbody');
+            tbody.innerHTML = '';
+
+            if (allFiles.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #666;">No files uploaded to this course yet.</td></tr>';
+                return;
+            }
+
+            allFiles.forEach(file => {                const tr = document.createElement('tr');
+                const lastUpdated = file.last_updated ? new Date(file.last_updated).toLocaleString() : 'N/A';
+                const course = courses.find(c => c.id === file.course_id);
+                const courseName = course?.name || currentCourseName;
+                const createdBy = course?.instructor || 'Unknown';
+                const uploadedBy = file.instructor_name || 'Unknown';
+                tr.innerHTML = `
+                    <td>${file.filename}</td>
+                    <td>${file.filetype}</td>
+                    <td>${lastUpdated}</td>
+                    <td>${courseName}</td>
+                    <td>${createdBy}</td>
+                    <td>${uploadedBy}</td>
+                    <td><button class="btn btn-error" onclick="deleteFile('${file.filename}', '${file.filetype}')" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">🗑️ Delete</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (error) {
+            console.error('Error loading files:', error);
+            alert('An error occurred while loading files.');
+        }
+    }
+
+    async function deleteFile(filename, filetype) {
+        if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+            return;
+        }        try {            const endpoint = filetype === 'pdf' ? `/api/pdf/${filename}` :
+                           filetype === 'docx' ? `/api/docx/${filename}` :
+                           filetype === 'ppt' ? `/api/ppt/${filename}` :
+                           filetype === 'audio' ? `/api/audio/${filename}` :
+                           `/api/video/${filename}`;
+            const res = await fetch(endpoint, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message || 'File deleted successfully!');
+                loadFiles(); // Refresh the list
+            } else {
+                alert('Delete failed: ' + (data.message || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error deleting file:', error);
+            alert('An error occurred while trying to delete the file.');
+        }
+    }    document.getElementById('uploadForm').onsubmit = async function(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            alert('Please select a file to upload.');
+            return;
+        }
+        
+        // Check session before upload
+        try {
+            const authCheck = await fetch('/api/check_auth', {credentials: 'include'});
+            const authData = await authCheck.json();
+            if (!authData.success) {
+                alert('Session expired or not authorized. Please login again.');
+                window.location.href = 'login.html';
+                return;
+            }
+        } catch (error) {
+            console.error('Error checking auth:', error);
+            alert('Error checking authentication. Please try again.');
+            return;
+        }        // Determine file type and endpoint
+        const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const isDOCX = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.toLowerCase().endsWith('.docx');
+        const isPPT = file.type === 'application/vnd.ms-powerpoint' || file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || file.name.toLowerCase().endsWith('.ppt') || file.name.toLowerCase().endsWith('.pptx');
+        const isAudio = file.type.startsWith('audio/') || file.name.toLowerCase().endsWith('.mp3') || file.name.toLowerCase().endsWith('.wav') || file.name.toLowerCase().endsWith('.ogg');
+        const endpoint = isPDF ? '/api/upload_pdf' :
+                        isDOCX ? '/api/upload_docx' :
+                        isPPT ? '/api/upload_ppt' :
+                        isAudio ? '/api/upload_audio' :
+                        '/api/upload';
+          const formData = new FormData();
+        formData.append('file', file);
+
+        // Add current course ID to form data
+        formData.append('courseId', currentCourseId);
+        
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            });
+            const data = await res.json();            if (data.success) {
+                const fileType = isPDF ? 'PDF' : isDOCX ? 'DOCX' : isPPT ? 'PPT' : isAudio ? 'Audio' : 'Video';
+                alert(`${fileType} upload successful!`);
+                loadFiles(); // Refresh the combined list
+                fileInput.value = ''; // Clear the file input
+            } else {
+                alert(`Upload failed: ${data.message}`);
+                // If unauthorized, redirect to login
+                if (res.status === 403 || res.status === 401) {
+                    alert('Session expired. Please login again.');
+                    window.location.href = 'login.html';
+                }
+            }
+        } catch (error) {
+            console.error('Error uploading file:', error);
+            alert('An error occurred while uploading the file.');
+        }
+    };
+
+    loadFiles(); // Load all files on page load
+    loadInstructorInfo(); // Load instructor info on page load
+    </script>
+</body>
+</html>

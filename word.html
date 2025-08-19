@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOCX Viewer</title>
+    <link rel="stylesheet" href="word.css">
+    <!-- Include docx-preview library -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.7.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.1.18/dist/docx-preview.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>DOCX File Viewer</h1>
+        <div class="upload-section">
+            <input type="file" id="docx-file" accept=".docx" />
+            <button id="upload-btn">Upload</button>
+        </div>
+        <div class="viewer-container" id="viewer-container">
+            <div class="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+                <div class="progress-text" id="progress-text">0%</div>
+            </div>
+            <div class="document-viewer" id="document-viewer"></div>
+        </div>
+    </div>
+    
+    <script src="word.js"></script>
+</body>
+</html>

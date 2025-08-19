@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Course - Training PRO</title>
+    <link rel="stylesheet" href="modern-style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="fade-in">
+    <nav>
+        <ul>
+            <li><span class="site-title">Training PRO</span></li>
+            <li style="text-align: center;">
+                <button onclick="goBack()" class="back-dashboard-btn">📚 Dashboard</button>
+            </li>
+            <li class="nav-right">
+                <span class="instructor-name">Welcome, <span id="instructorName">Instructor</span></span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="main-container slide-in">
+        <div class="dashboard-header">
+            <h1>Create New Course</h1>
+            <p class="welcome-message">🎓 Create a new course for your students</p>
+        </div>
+        
+        <form id="createCourseForm">
+            <label for="courseName">Course Name:</label>
+            <input type="text" id="courseName" name="courseName" placeholder="Enter course name" required>
+            
+            <button type="submit" class="btn">Create Course</button>
+        </form>
+
+        <h2>Your Courses</h2>
+        <table border="1" id="coursesTable">
+            <thead>
+                <tr>
+                    <th>Course Name</th>
+                    <th>Created By</th>
+                    <th>Last Update</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    
+    <script>
+    // Check authentication on page load
+    async function checkAuth() {
+        try {
+            const res = await fetch('/api/check_auth', {credentials: 'include'});
+            const data = await res.json();
+            if (!data.success) {
+                // Redirect to login if not authenticated as instructor
+                alert('Please login as instructor first.');
+                window.location.href = 'login.html';
+            } else {
+                document.getElementById('instructorName').textContent = data.name;
+                // Load courses after successful authentication
+                loadCourses();
+            }
+        } catch (error) {
+            console.error('Error checking auth:', error);
+            alert('Authentication error. Please login again.');
+            window.location.href = 'login.html';
+        }
+    }
+
+    // Load courses created by the instructor
+    async function loadCourses() {
+        try {
+            const res = await fetch('/api/courses', {credentials: 'include'});
+            const courses = await res.json();
+            
+            const tbody = document.querySelector('#coursesTable tbody');
+            tbody.innerHTML = '';
+            
+            courses.forEach(course => {
+                const tr = document.createElement('tr');
+                const createdAt = course.created_at ? new Date(course.created_at).toLocaleString() : 'N/A';
+                tr.innerHTML = `
+                    <td>${course.name}</td>
+                    <td>${course.instructor || 'Unknown'}</td>
+                    <td>${createdAt}</td>
+                    <td>
+                        <button class="btn reset" onclick="deleteCourse('${course.id}', '${course.name}')">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (error) {
+            console.error('Error loading courses:', error);
+            alert('An error occurred while loading courses.');
+        }
+    }
+
+    // Delete a course
+    async function deleteCourse(courseId, courseName) {
+        if (!confirm(`Are you sure you want to delete the course "${courseName}"? This will also delete all associated files.`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/courses/${courseId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                // Show detailed success message with file count information
+                let message = 'Course deleted successfully!';
+                if (data.deleted_files_count !== undefined) {
+                    message += `\n\nDeleted ${data.deleted_files_count} files and cleaned ${data.deleted_progress_count} progress records.`;
+                }
+                alert(message);
+                loadCourses(); // Refresh the list
+            } else {
+                alert('Error deleting course: ' + (data.message || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error deleting course:', error);
+            alert('An error occurred while deleting the course.');
+        }
+    }
+
+    // Handle form submission
+    document.getElementById('createCourseForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const courseName = document.getElementById('courseName').value;
+        
+        if (!courseName || courseName.trim() === '') {
+            alert('Please enter a course name');
+            return;
+        }
+        
+        // Show feedback to user
+        const submitButton = this.querySelector('button[type="submit"]');
+        const originalText = submitButton.innerText;
+        submitButton.disabled = true;
+        submitButton.innerText = 'Creating...';
+        
+        try {
+            const res = await fetch('/api/courses', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({ courseName })
+            });
+            
+            const data = await res.json();
+            
+            if (data.success) {
+                alert('Course created successfully!');
+                document.getElementById('courseName').value = ''; // Clear the input
+                loadCourses(); // Refresh the courses list
+                submitButton.disabled = false;
+                submitButton.innerText = originalText;
+            } else {
+                alert('Error creating course: ' + (data.message || 'Unknown error'));
+                submitButton.disabled = false;
+                submitButton.innerText = originalText;
+            }
+        } catch (error) {
+            console.error('Network error creating course:', error);
+            alert('Network error creating course. Please check your connection and try again.');
+            submitButton.disabled = false;
+            submitButton.innerText = originalText;
+        }
+    });
+    
+    function goBack() {
+        window.location.href = 'instructor_dashboard.html';
+    }
+    
+    function logout() {
+        fetch('/api/logout', {
+            method: 'POST',
+            credentials: 'include'
+        }).then(() => {
+            window.location.href = 'login.html';
+        });
+    }
+    
+    // Check authentication on page load
+    checkAuth();
+    </script>
+</body>
+</html>
