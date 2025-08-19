@@ -33,11 +33,11 @@
         <div class="card slide-in">
             <div class="card-header">
                 <h2 class="card-title">📤 Upload New Content</h2>
-                <p class="card-subtitle">Add videos, documents, presentations, and audio files</p>
+                <p class="card-subtitle">Add videos, documents, and audio files</p>
             </div>
             <form id="uploadForm" enctype="multipart/form-data">
                 <label for="fileInput">Select File to Upload</label>
-                <input type="file" id="fileInput" accept="video/*,.pdf,.docx,.ppt,.pptx,.mp3,.wav,.ogg">
+                <input type="file" id="fileInput" accept="video/*,.pdf,.docx,.mp3,.wav,.ogg">
                 <input type="hidden" id="courseIdInput" name="courseId" value="">
                 <button type="submit" class="btn btn-primary">📤 Upload File</button>
             </form>
@@ -151,11 +151,6 @@
             const docxFiles = await docxRes.json();
             allFiles.push(...docxFiles.map(d => ({...d, deleteEndpoint: `/api/docx/${d.filename}`})));
 
-            // Fetch PPT files
-            const pptRes = await fetch(`/api/ppts${courseParam}`, {credentials: 'include'});
-            const pptFiles = await pptRes.json();
-            allFiles.push(...pptFiles.map(p => ({...p, deleteEndpoint: `/api/ppt/${p.filename}`})));
-
             // Fetch Audio files
             const audioRes = await fetch(`/api/audio_files${courseParam}`, {credentials: 'include'});
             const audioFiles = await audioRes.json();
@@ -195,9 +190,8 @@
     async function deleteFile(filename, filetype) {
         if (!confirm(`Are you sure you want to delete ${filename}?`)) {
             return;
-        }        try {            const endpoint = filetype === 'pdf' ? `/api/pdf/${filename}` :
+    }        try {            const endpoint = filetype === 'pdf' ? `/api/pdf/${filename}` :
                            filetype === 'docx' ? `/api/docx/${filename}` :
-                           filetype === 'ppt' ? `/api/ppt/${filename}` :
                            filetype === 'audio' ? `/api/audio/${filename}` :
                            `/api/video/${filename}`;
             const res = await fetch(endpoint, {
@@ -241,11 +235,9 @@
         }        // Determine file type and endpoint
         const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
         const isDOCX = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.toLowerCase().endsWith('.docx');
-        const isPPT = file.type === 'application/vnd.ms-powerpoint' || file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || file.name.toLowerCase().endsWith('.ppt') || file.name.toLowerCase().endsWith('.pptx');
         const isAudio = file.type.startsWith('audio/') || file.name.toLowerCase().endsWith('.mp3') || file.name.toLowerCase().endsWith('.wav') || file.name.toLowerCase().endsWith('.ogg');
         const endpoint = isPDF ? '/api/upload_pdf' :
                         isDOCX ? '/api/upload_docx' :
-                        isPPT ? '/api/upload_ppt' :
                         isAudio ? '/api/upload_audio' :
                         '/api/upload';
           const formData = new FormData();
@@ -261,7 +253,7 @@
                 credentials: 'include'
             });
             const data = await res.json();            if (data.success) {
-                const fileType = isPDF ? 'PDF' : isDOCX ? 'DOCX' : isPPT ? 'PPT' : isAudio ? 'Audio' : 'Video';
+                const fileType = isPDF ? 'PDF' : isDOCX ? 'DOCX' : isAudio ? 'Audio' : 'Video';
                 alert(`${fileType} upload successful!`);
                 loadFiles(); // Refresh the combined list
                 fileInput.value = ''; // Clear the file input

@@ -3,8 +3,14 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
 import redis
+import fnmatch
 import datetime  # Added for timestamp
 import json
+try:
+    # Upstash Redis client for Vercel KV
+    from upstash_redis import Redis as UpstashRedis
+except Exception:
+    UpstashRedis = None
 
 
 
@@ -21,73 +27,192 @@ UPLOAD_FOLDER = 'uploads'
 PDF_UPLOAD_FOLDER = 'uploads_pdf' # New folder for PDFs
 DOCX_UPLOAD_FOLDER = 'uploads_docx' # New folder for DOCX files
 AUDIO_UPLOAD_FOLDER = 'uploads_audio' # New folder for Audio files
-PPT_UPLOAD_FOLDER = 'uploads_ppt' # New folder for PPT files
-PPT_IMAGES_FOLDER = 'uploads_ppt_images' # Folder for converted PPT images
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
 ALLOWED_PDF_EXTENSIONS = {'pdf'} # Allowed extensions for PDFs
 ALLOWED_DOCX_EXTENSIONS = {'docx'} # Allowed extensions for DOCX files
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'ogg'} # Allowed extensions for Audio files
-ALLOWED_PPT_EXTENSIONS = {'ppt', 'pptx'} # Allowed extensions for PPT files
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['PDF_UPLOAD_FOLDER'] = PDF_UPLOAD_FOLDER # Add to app config
 app.config['DOCX_UPLOAD_FOLDER'] = DOCX_UPLOAD_FOLDER # Add to app config
 app.config['AUDIO_UPLOAD_FOLDER'] = AUDIO_UPLOAD_FOLDER # Add to app config
-app.config['PPT_UPLOAD_FOLDER'] = PPT_UPLOAD_FOLDER # Add to app config
-app.config['PPT_IMAGES_FOLDER'] = PPT_IMAGES_FOLDER # Add to app config
 
-# Connect to Redis with error handling
-try:
-    r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-    # Test connection
-    r.ping()
-    print("Redis connection successful")
+class RedisAdapter:
+    """Adapter to provide redis-py-like API for either Upstash (Vercel KV) or redis-py client."""
+    def __init__(self, client, flavor: str):
+        self.client = client
+        self.flavor = flavor  # 'upstash' or 'redis'
 
-    # Initialize course key in Redis if it doesn't exist
-    if not r.exists('courses'):
-        r.set('courses', json.dumps([]))
-        print("Initialized empty courses array in Redis")
-except redis.ConnectionError:
-    print("ERROR: Cannot connect to Redis. Make sure Redis server is running.")
-    # Use in-memory fallback for development/testing
-    class FallbackRedis:
-        def __init__(self):
-            self.data = {'courses': json.dumps([])}
+    # Simple KV
+    def ping(self):
+        try:
+            return self.client.ping()
+        except Exception:
+            # Fallback probe for Upstash REST if ping not supported
+            try:
+                self.client.set("__ping__", "1")
+                return True
+            except Exception:
+                return False
 
-        def get(self, key):
-            return self.data.get(key)
+    def get(self, key):
+        return self.client.get(key)
 
-        def set(self, key, value):
-            self.data[key] = value
-            return True
+    def set(self, key, value):
+        return self.client.set(key, value)
 
-        def exists(self, key):
-            return key in self.data
+    def exists(self, key):
+        try:
+            res = self.client.exists(key)
+            # Upstash returns int; redis-py also returns int
+            return bool(res)
+        except Exception:
+            return False
 
-        def hset(self, hash_name, key, value):
-            if hash_name not in self.data:
-                self.data[hash_name] = {}
-            if not isinstance(self.data[hash_name], dict):
-                self.data[hash_name] = {}
-            self.data[hash_name][key] = value
-            return True
-
-        def hget(self, hash_name, key):
-            if hash_name not in self.data or not isinstance(self.data[hash_name], dict):
-                return None
-            return self.data[hash_name].get(key)
-
-        def hgetall(self, hash_name):
-            if hash_name not in self.data or not isinstance(self.data[hash_name], dict):
-                return {}
-            return self.data[hash_name]
-
-        def hdel(self, hash_name, key):
-            if hash_name in self.data and isinstance(self.data[hash_name], dict) and key in self.data[hash_name]:
-                del self.data[hash_name][key]
-                return 1
+    def delete(self, key):
+        try:
+            return self.client.delete(key)
+        except Exception:
             return 0
 
-    print("Using in-memory fallback for Redis")
+    # Hashes
+    def hset(self, name, key, value=None):
+        # Support both mapping and field/value forms for compatibility
+        try:
+            if value is None and isinstance(key, dict):
+                return self.client.hset(name, key)
+            return self.client.hset(name, key, value)
+        except TypeError:
+            # Upstash may prefer mapping
+            return self.client.hset(name, {key: value})
+
+    def hget(self, name, key):
+        return self.client.hget(name, key)
+
+    def hgetall(self, name):
+        data = self.client.hgetall(name)
+        if isinstance(data, dict):
+            return data
+        # Upstash may return a flat list [k1, v1, k2, v2, ...]
+        if isinstance(data, list):
+            it = iter(data)
+            return {k: v for k, v in zip(it, it)}
+        return {}
+
+    def hdel(self, name, key):
+        return self.client.hdel(name, key)
+
+    def hkeys(self, name):
+        try:
+            keys = self.client.hkeys(name)
+            if isinstance(keys, list):
+                return keys
+        except Exception:
+            pass
+        return list(self.hgetall(name).keys())
+
+    # Scans/Keys
+    def keys(self, pattern="*"):
+        try:
+            return self.client.keys(pattern)
+        except Exception:
+            # Attempt SCAN iteration if available
+            try:
+                cursor = 0
+                out = []
+                while True:
+                    cursor, keys = self.client.scan(cursor=cursor, match=pattern, count=100)
+                    out.extend(keys)
+                    if cursor == 0:
+                        break
+                return out
+            except Exception:
+                # As a last resort (for limited in-memory fallback), return empty
+                return []
+
+
+class FallbackRedis:
+    """Simple in-memory fallback; not for production."""
+    def __init__(self):
+        self.data = {'courses': json.dumps([])}
+
+    def ping(self):
+        return True
+
+    def get(self, key):
+        return self.data.get(key)
+
+    def set(self, key, value):
+        self.data[key] = value
+        return True
+
+    def exists(self, key):
+        return key in self.data
+
+    def delete(self, key):
+        return 1 if self.data.pop(key, None) is not None else 0
+
+    def hset(self, hash_name, key, value=None):
+        if hash_name not in self.data or not isinstance(self.data[hash_name], dict):
+            self.data[hash_name] = {}
+        if value is None and isinstance(key, dict):
+            self.data[hash_name].update(key)
+        else:
+            self.data[hash_name][key] = value
+        return True
+
+    def hget(self, hash_name, key):
+        if hash_name not in self.data or not isinstance(self.data[hash_name], dict):
+            return None
+        return self.data[hash_name].get(key)
+
+    def hgetall(self, hash_name):
+        if hash_name not in self.data or not isinstance(self.data[hash_name], dict):
+            return {}
+        return dict(self.data[hash_name])
+
+    def hdel(self, hash_name, key):
+        if hash_name in self.data and isinstance(self.data[hash_name], dict) and key in self.data[hash_name]:
+            del self.data[hash_name][key]
+            return 1
+        return 0
+
+    def hkeys(self, hash_name):
+        return list(self.hgetall(hash_name).keys())
+
+    def keys(self, pattern="*"):
+        # Support glob patterns using fnmatch
+        return [k for k in self.data.keys() if fnmatch.fnmatch(k, pattern)]
+
+
+def create_kv_client():
+    # Prefer Vercel KV (Upstash) if env vars are present
+    kv_url = os.getenv('KV_REST_API_URL')
+    kv_token = os.getenv('KV_REST_API_TOKEN')
+    if kv_url and kv_token and UpstashRedis is not None:
+        client = UpstashRedis(url=kv_url, token=kv_token)
+        return RedisAdapter(client, 'upstash')
+
+    # Fallback to local Redis for development
+    host = os.getenv('REDIS_HOST', 'localhost')
+    port = int(os.getenv('REDIS_PORT', '6379'))
+    db = int(os.getenv('REDIS_DB', '0'))
+    client = redis.Redis(host=host, port=port, db=db, decode_responses=True)
+    return RedisAdapter(client, 'redis')
+
+
+# Connect to KV/Redis with error handling
+try:
+    r = create_kv_client()
+    if not r.ping():
+        raise Exception('Ping failed')
+    print("Connected to Vercel KV" if getattr(r, 'flavor', '') == 'upstash' else "Redis connection successful")
+
+    # Initialize course key in store if it doesn't exist
+    if not r.exists('courses'):
+        r.set('courses', json.dumps([]))
+        print("Initialized empty courses array in KV/Redis")
+except Exception as _e:
+    print(f"ERROR: Cannot connect to KV/Redis. Using in-memory fallback. Details: {_e}")
     r = FallbackRedis()
 
 if not os.path.exists(UPLOAD_FOLDER):
@@ -98,10 +223,6 @@ if not os.path.exists(DOCX_UPLOAD_FOLDER): # Create DOCX upload folder
     os.makedirs(DOCX_UPLOAD_FOLDER)
 if not os.path.exists(AUDIO_UPLOAD_FOLDER): # Create AUDIO upload folder
     os.makedirs(AUDIO_UPLOAD_FOLDER)
-if not os.path.exists(PPT_UPLOAD_FOLDER): # Create PPT upload folder
-    os.makedirs(PPT_UPLOAD_FOLDER)
-if not os.path.exists(PPT_IMAGES_FOLDER): # Create PPT images folder
-    os.makedirs(PPT_IMAGES_FOLDER)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -117,200 +238,34 @@ def allowed_docx_file(filename): # New function for DOCX files
 def allowed_audio_file(filename): # New function for Audio files
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_AUDIO_EXTENSIONS
 
-def allowed_ppt_file(filename): # New function for PPT files
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_PPT_EXTENSIONS
+ 
 
+# Auth endpoints
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.json
-    name = data.get('name')
-    role = data.get('role')
-    if not name or role not in ['instructor', 'student']:
-        return jsonify({'success': False, 'message': 'Invalid login'}), 400
-    session['name'] = name
-    session['role'] = role
-    return jsonify({'success': True, 'role': role})
+    try:
+        data = request.get_json(silent=True) or {}
+        name = data.get('name')
+        role = data.get('role')
+        if not name or role not in ('instructor', 'student'):
+            return jsonify({'success': False, 'message': 'Invalid credentials'}), 400
+
+        session['name'] = name
+        session['role'] = role
+        return jsonify({'success': True, 'name': name, 'role': role})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
-    session.pop('name', None)
-    session.pop('role', None)
-    return jsonify({'success': True, 'message': 'Logged out successfully'})
+    session.clear()
+    return jsonify({'success': True})
 
 @app.route('/api/check_auth', methods=['GET'])
 def check_auth():
-    """Check if user is authenticated and return session details"""
-    name = session.get('name')
-    role = session.get('role')
-
-    print(f"Check auth - Session data: {dict(session)}")
-
-    if name and role:
-        return jsonify({
-            'success': True,
-            'name': name,
-            'role': role
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'message': 'Not authenticated'
-        }), 401
-
-@app.route('/api/upload', methods=['POST'])
-def upload_video():
-    print(f"Video upload - Session data: {dict(session)}")  # Debug: print session data
-    print(f"Video upload - Session role: {session.get('role')}")  # Debug: print role
-    print(f"Video upload - Session name: {session.get('name')}")  # Debug: print name
-
-    if session.get('role') != 'instructor':
-        print(f"Video upload authorization failed. Role in session: {session.get('role')}")  # Debug
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
-    instructor_name = session.get('name')
-    if not instructor_name:
-        print("Video upload - Instructor name not found in session")  # Debug
-        return jsonify({'success': False, 'message': 'Instructor name not found in session.'}), 401
-
-    # Get the course ID from the request
-    course_id = request.form.get('courseId')
-    if not course_id:
-        return jsonify({'success': False, 'message': 'Course ID is required'}), 400
-
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'message': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'message': 'No selected file'}), 400
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        # Save video metadata in Redis including timestamp, instructor name, and course ID
-        now = datetime.datetime.now().isoformat()
-        video_data = {
-            'filetype': 'video',
-            'last_updated': now,
-            'instructor_name': instructor_name,
-            'course_id': course_id
-        }
-        r.hset('videos', filename, json.dumps(video_data))
-        return jsonify({'success': True, 'filename': filename, 'filetype': 'video', 'last_updated': now, 'instructor_name': instructor_name, 'course_id': course_id})
-    return jsonify({'success': False, 'message': 'Invalid file type'}), 400
-
-@app.route('/api/upload_pdf', methods=['POST']) # New endpoint for PDF uploads
-def upload_pdf():
-    try:
-        print(f"Session data: {dict(session)}")  # Debug: print session data
-        print(f"Session role: {session.get('role')}")  # Debug: print role
-        print(f"Session name: {session.get('name')}")  # Debug: print name
-
-        if session.get('role') != 'instructor':
-            print(f"Authorization failed. Role in session: {session.get('role')}")  # Debug
-            return jsonify({'success': False, 'message': 'Unauthorized - Please login as instructor'}), 403
-        instructor_name = session.get('name')
-        if not instructor_name:
-            print("Instructor name not found in session")  # Debug
-            return jsonify({'success': False, 'message': 'Instructor name not found in session. Please login again.'}), 401
-
-        # Get the course ID from the request
-        course_id = request.form.get('courseId')
-        if not course_id:
-            return jsonify({'success': False, 'message': 'Course ID is required'}), 400
-
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'message': 'No file part'}), 400
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'success': False, 'message': 'No selected file'}), 400
-
-        print(f"Attempting to upload file: {file.filename}")  # Debug
-
-        if file and allowed_pdf_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['PDF_UPLOAD_FOLDER'], filename)
-
-            # Check if file already exists and handle accordingly
-            if os.path.exists(filepath):
-                print(f"File {filename} already exists, will overwrite")  # Debug
-            file.save(filepath)
-            print(f"File saved to: {filepath}")  # Debug
-
-            now = datetime.datetime.now().isoformat()
-            pdf_data = {
-                'filetype': 'pdf',
-                'last_updated': now,
-                'instructor_name': instructor_name,
-                'course_id': course_id
-            }
-            r.hset('pdfs', filename, json.dumps(pdf_data)) # Store in a new 'pdfs' hash
-            print(f"PDF data saved to Redis for {filename}")  # Debug
-
-            return jsonify({'success': True, 'filename': filename, 'filetype': 'pdf', 'last_updated': now, 'instructor_name': instructor_name, 'course_id': course_id})
-        else:
-            print(f"File type not allowed for: {file.filename}")  # Debug
-            return jsonify({'success': False, 'message': 'Invalid file type, only PDF allowed'}), 400
-    except Exception as e:
-        print(f"Error in upload_pdf: {str(e)}")  # Debug
-        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
-
-@app.route('/api/upload_docx', methods=['POST']) # New endpoint for DOCX uploads
-def upload_docx():
-    try:
-        print(f"DOCX upload - Session data: {dict(session)}")  # Debug: print session data
-        print(f"DOCX upload - Session role: {session.get('role')}")  # Debug: print role
-        print(f"DOCX upload - Session name: {session.get('name')}")  # Debug: print name
-
-        if session.get('role') != 'instructor':
-            print(f"DOCX upload authorization failed. Role in session: {session.get('role')}")  # Debug
-            return jsonify({'success': False, 'message': 'Unauthorized - Please login as instructor'}), 403
-        instructor_name = session.get('name')
-        if not instructor_name:
-            print("DOCX upload - Instructor name not found in session")  # Debug
-            return jsonify({'success': False, 'message': 'Instructor name not found in session. Please login again.'}), 401
-
-        # Get the course ID from the request
-        course_id = request.form.get('courseId')
-        if not course_id:
-            return jsonify({'success': False, 'message': 'Course ID is required'}), 400
-
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'message': 'No file part'}), 400
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'success': False, 'message': 'No selected file'}), 400
-
-        print(f"Attempting to upload DOCX file: {file.filename}")  # Debug
-
-        if file and allowed_docx_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['DOCX_UPLOAD_FOLDER'], filename)
-
-            # Check if file already exists and handle accordingly
-            if os.path.exists(filepath):
-                print(f"DOCX file {filename} already exists, will overwrite")  # Debug
-
-            file.save(filepath)
-            print(f"DOCX file saved to: {filepath}")  # Debug
-            now = datetime.datetime.now().isoformat()
-            docx_data = {
-                'filetype': 'docx',
-                'last_updated': now,
-                'instructor_name': instructor_name,
-                'course_id': course_id
-            }
-            r.hset('docx_files', filename, json.dumps(docx_data)) # Store in a new 'docx_files' hash
-            print(f"DOCX data saved to Redis for {filename}")  # Debug
-            return jsonify({'success': True, 'filename': filename, 'filetype': 'docx', 'last_updated': now, 'instructor_name': instructor_name, 'course_id': course_id})
-        else:
-            print(f"File type not allowed for: {file.filename}")  # Debug
-            return jsonify({'success': False, 'message': 'Invalid file type, only DOCX allowed'}), 400
-
-    except Exception as e:
-        print(f"Error in upload_docx: {str(e)}")  # Debug
-        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
-
-
-
+    if 'name' in session and 'role' in session:
+        return jsonify({'success': True, 'name': session['name'], 'role': session['role']})
+    return jsonify({'success': False, 'message': 'Not authenticated'}), 401
 @app.route('/api/upload_audio', methods=['POST']) # New endpoint for Audio uploads
 def upload_audio():
     try:
@@ -352,198 +307,6 @@ def upload_audio():
 
     except Exception as e:
         print(f"Error in upload_audio: {str(e)}")
-        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
-
-def convert_ppt_to_images_win32com(ppt_path, output_folder, filename_base):
-    """Convert PPT slides to images using win32com (Windows only)"""
-    try:
-        import win32com.client
-        import pythoncom
-
-        # Initialize COM
-        pythoncom.CoInitialize()
-
-        # Create a subfolder for this PPT's images
-        ppt_image_folder = os.path.join(output_folder, filename_base)
-        if not os.path.exists(ppt_image_folder):
-            os.makedirs(ppt_image_folder)
-
-        # Initialize PowerPoint application
-        powerpoint = win32com.client.Dispatch("PowerPoint.Application")
-        powerpoint.Visible = True  # Make visible for better compatibility
-
-        # Open the presentation
-        presentation = powerpoint.Presentations.Open(os.path.abspath(ppt_path))
-        slide_count = presentation.Slides.Count
-
-        print(f"Found {slide_count} slides in presentation")
-
-        # Export each slide as image with high quality
-        for i in range(1, slide_count + 1):
-            image_path = os.path.join(ppt_image_folder, f"slide_{i:03d}.png")
-            # Use absolute path to avoid issues
-            abs_image_path = os.path.abspath(image_path)
-            print(f"Exporting slide {i} to {abs_image_path}")
-
-            # Export slide as PNG with very high resolution
-            # Parameters: (FileName, FilterName, ScaleWidth, ScaleHeight)
-            presentation.Slides(i).Export(abs_image_path, "PNG", 1920, 1440)
-
-        # Close presentation and quit PowerPoint
-        presentation.Close()
-        powerpoint.Quit()
-
-        # Clean up COM
-        pythoncom.CoUninitialize()
-
-        return slide_count
-
-    except Exception as e:
-        print(f"Error in win32com conversion: {str(e)}")
-        # Clean up COM in case of error
-        try:
-            pythoncom.CoUninitialize()
-        except:
-            pass
-        raise e
-
-
-
-def convert_ppt_to_images_libreoffice(ppt_path, output_folder, filename_base):
-    """Convert PPT slides to images using LibreOffice (Cross-platform)"""
-    try:
-        import subprocess
-
-        # Create a subfolder for this PPT's images
-        ppt_image_folder = os.path.join(output_folder, filename_base)
-        if not os.path.exists(ppt_image_folder):
-            os.makedirs(ppt_image_folder)
-
-        # Convert to PDF first using LibreOffice
-        pdf_path = os.path.join(ppt_image_folder, f"{filename_base}.pdf")
-
-        # LibreOffice headless conversion to PDF
-        cmd = [
-            'soffice', '--headless', '--convert-to', 'pdf',
-            '--outdir', ppt_image_folder, ppt_path
-        ]
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        if result.returncode != 0:
-            raise Exception(f"LibreOffice conversion failed: {result.stderr}")
-
-        # Convert PDF to images using pdf2image (if available)
-        try:
-            from pdf2image import convert_from_path
-            images = convert_from_path(pdf_path, dpi=200)
-
-            for i, image in enumerate(images):
-                image_path = os.path.join(ppt_image_folder, f"slide_{i+1:03d}.png")
-                image.save(image_path, 'PNG')
-
-            # Clean up PDF
-            os.remove(pdf_path)
-            return len(images)
-
-        except ImportError:
-            print("pdf2image not available, keeping PDF format")
-            return 1  # Return 1 as we have the PDF
-
-    except Exception as e:
-        print(f"Error in LibreOffice conversion: {str(e)}")
-        raise e
-
-
-
-def convert_ppt_to_images(ppt_path, output_folder, filename_base):
-    """Convert PPT slides to images using the best available method"""
-    import platform
-
-    print(f"Converting PPT to images: {ppt_path}")
-
-    # Try methods in order of preference
-    methods = []
-
-    # On Windows, try win32com first (highest quality)
-    if platform.system() == "Windows":
-        methods.append(("Win32COM (PowerPoint)", convert_ppt_to_images_win32com))
-
-    # Try LibreOffice (cross-platform)
-    methods.append(("LibreOffice", convert_ppt_to_images_libreoffice))
-
-    last_error = None
-    for method_name, method_func in methods:
-        try:
-            print(f"Trying conversion method: {method_name}")
-            result = method_func(ppt_path, output_folder, filename_base)
-            print(f"Successfully converted using {method_name}")
-            return result
-        except Exception as e:
-            print(f"Method {method_name} failed: {str(e)}")
-            last_error = e
-            continue
-
-    # If all methods failed, raise the last error
-    if last_error:
-        raise last_error
-    else:
-        raise Exception("All conversion methods failed")
-
-@app.route('/api/upload_ppt', methods=['POST'])
-def upload_ppt():
-    try:
-        if session.get('role') != 'instructor':
-            return jsonify({'success': False, 'message': 'Unauthorized - Please login as instructor'}), 403
-        instructor_name = session.get('name')
-        if not instructor_name:
-            return jsonify({'success': False, 'message': 'Instructor name not found in session. Please login again.'}), 401
-
-        course_id = request.form.get('courseId')
-        if not course_id:
-            return jsonify({'success': False, 'message': 'Course ID is required'}), 400
-
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'message': 'No file uploaded'}), 400
-
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'success': False, 'message': 'No file selected'}), 400
-
-        if file and allowed_ppt_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['PPT_UPLOAD_FOLDER'], filename)
-
-            if os.path.exists(filepath):
-                print(f"PPT file {filename} already exists, will overwrite")
-
-            file.save(filepath)
-
-            # Convert PPT to images
-            filename_base = os.path.splitext(filename)[0]
-            try:
-                slide_count = convert_ppt_to_images(filepath, app.config['PPT_IMAGES_FOLDER'], filename_base)
-                print(f"Converted {filename} to {slide_count} images")
-            except Exception as e:
-                print(f"Error converting PPT: {str(e)}")
-                # Clean up the uploaded file if conversion fails
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-                return jsonify({'success': False, 'message': f'Error converting PPT to images: {str(e)}'}), 500
-
-            now = datetime.datetime.now().isoformat()
-            ppt_data = {
-                'filetype': 'ppt',
-                'last_updated': now,
-                'instructor_name': instructor_name,
-                'course_id': course_id,
-                'slide_count': slide_count
-            }
-            r.hset('ppts', filename, json.dumps(ppt_data))
-            return jsonify({'success': True, 'filename': filename, 'filetype': 'ppt', 'last_updated': now, 'instructor_name': instructor_name, 'course_id': course_id, 'slide_count': slide_count})
-        else:
-            return jsonify({'success': False, 'message': 'Invalid file type, only PPT and PPTX allowed'}), 400
-    except Exception as e:
-        print(f"Error in upload_ppt: {str(e)}")
         return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/videos', methods=['GET'])
@@ -650,39 +413,6 @@ def list_docx_files():
                 docx_list.append({'filename': k, 'filetype': 'unknown', 'last_updated': 'N/A', 'instructor_name': 'Unknown', 'course_id': ''})
     return jsonify(docx_list)
 
-@app.route('/api/ppts', methods=['GET']) # New endpoint to list PPT files
-def list_ppts():
-    ppts_raw = r.hgetall('ppts')
-    ppts_list = []
-    current_role = session.get('role')
-    current_instructor_name = session.get('name')
-    course_id = request.args.get('courseId')  # Get course_id from query parameters
-
-    for k, v_json in ppts_raw.items():
-        try:
-            v_data = json.loads(v_json)
-
-            # Filter by course_id if provided
-            if course_id and v_data.get('course_id') != course_id:
-                continue
-
-            ppt_item = {
-                'filename': k,
-                'filetype': v_data.get('filetype'),
-                'last_updated': v_data.get('last_updated'),
-                'instructor_name': v_data.get('instructor_name'),
-                'course_id': v_data.get('course_id', ''),  # Include course_id with default empty string
-                'slide_count': v_data.get('slide_count', 0)  # Include slide count
-            }
-            # For multi-instructor collaboration: show all PPT files in a course to any instructor
-            if current_role == 'instructor':
-                ppts_list.append(ppt_item)  # Show all PPT files to instructors
-            else: # For students or other roles, show all ppt files
-                ppts_list.append(ppt_item)
-        except json.JSONDecodeError:
-            if current_role != 'instructor' and not course_id:
-                ppts_list.append({'filename': k, 'filetype': 'unknown', 'last_updated': 'N/A', 'instructor_name': 'Unknown', 'course_id': '', 'slide_count': 0})
-    return jsonify(ppts_list)
 
 @app.route('/api/audio_files', methods=['GET']) # New endpoint to list Audio files
 def list_audio_files():
@@ -865,57 +595,6 @@ def delete_docx_file(filename):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/api/ppt/<filename>', methods=['DELETE']) # New endpoint to delete a PPT file
-def delete_ppt_file(filename):
-    if session.get('role') != 'instructor':
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
-
-    current_instructor_name = session.get('name')
-    if not current_instructor_name:
-        return jsonify({'success': False, 'message': 'Instructor name not found in session.'}), 401
-
-    secure_name = secure_filename(filename)
-    if not secure_name:
-        return jsonify({'success': False, 'message': 'Invalid filename'}), 400
-
-    ppt_json = r.hget('ppts', secure_name)
-    if not ppt_json:
-        filepath_check = os.path.join(app.config['PPT_UPLOAD_FOLDER'], secure_name)
-        if os.path.exists(filepath_check):
-             return jsonify({'success': False, 'message': f'{secure_name} not found in database. Cannot confirm ownership.'}), 404
-        return jsonify({'success': False, 'message': f'{secure_name} not found in database or filesystem.'}), 404
-    try:
-        ppt_data = json.loads(ppt_json)
-        owner_instructor = ppt_data.get('instructor_name')
-
-        if owner_instructor != current_instructor_name:
-            return jsonify({'success': False, 'message': 'Unauthorized. You do not own this PPT file.'}), 403
-
-        # Delete the original PPT file
-        filepath = os.path.join(app.config['PPT_UPLOAD_FOLDER'], secure_name)
-        if os.path.exists(filepath):
-            os.remove(filepath)
-
-        # Delete the converted images folder
-        filename_base = os.path.splitext(secure_name)[0]
-        images_folder = os.path.join(app.config['PPT_IMAGES_FOLDER'], filename_base)
-        if os.path.exists(images_folder):
-            import shutil
-            shutil.rmtree(images_folder)
-
-        result = r.hdel('ppts', secure_name)
-        if result > 0:
-            return jsonify({'success': True, 'message': f'{secure_name} deleted successfully.'})
-        else:
-            # This case implies a race condition or unexpected Redis state.
-            fs_status_message = "File on filesystem might have been removed."
-            if os.path.exists(filepath):
-                fs_status_message = "File on filesystem still exists."
-            return jsonify({'success': False, 'message': f'Error: {secure_name} not found in database for deletion. {fs_status_message}'}), 500
-    except json.JSONDecodeError:
-        return jsonify({'success': False, 'message': 'Error decoding PPT data from database.'}), 500
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/audio/<filename>', methods=['DELETE']) # New endpoint to delete an Audio file
 def delete_audio_file(filename):
@@ -1031,28 +710,6 @@ def docx_progress(student, filename):
             return jsonify({'success': True})
         return jsonify({'success': False, 'message': 'Missing maxProgressPercent'}), 400
 
-@app.route('/api/progress_ppt/<student>/<filename>', methods=['GET', 'POST']) # New endpoint for PPT progress
-def ppt_progress(student, filename):
-    # Key for storing current slide and max percentage progress for a student and a PPT
-    # e.g., progress_ppt:student_name:example.pptx -> {"currentSlide": 5, "maxProgressPercent": 50}
-    key = f'progress_ppt:{student}:{secure_filename(filename)}'
-    if request.method == 'GET':
-        progress_data_json = r.get(key)
-        if progress_data_json:
-            progress_data = json.loads(progress_data_json)
-            return jsonify({
-                'currentSlide': int(progress_data.get('currentSlide', 1)),
-                'maxProgressPercent': float(progress_data.get('maxProgressPercent', 0))
-            })
-        return jsonify({'currentSlide': 1, 'maxProgressPercent': 0}) # Default if no progress found
-    else: # POST
-        data = request.json
-        current_slide = data.get('currentSlide')
-        max_progress_percent = data.get('maxProgressPercent')
-        if current_slide is not None and max_progress_percent is not None:
-            r.set(key, json.dumps({'currentSlide': current_slide, 'maxProgressPercent': max_progress_percent}))
-            return jsonify({'success': True})
-        return jsonify({'success': False, 'message': 'Missing currentSlide or maxProgressPercent'}), 400
 
 
 
@@ -1092,13 +749,6 @@ def serve_docx(filename):
 def serve_audio(filename):
     return send_from_directory(app.config['AUDIO_UPLOAD_FOLDER'], filename)
 
-@app.route('/uploads_ppt_images/<ppt_name>/<image_name>') # New route to serve PPT images
-def serve_ppt_image(ppt_name, image_name):
-    # Serve individual slide images for PPT presentations
-    # ppt_name is the base filename (without extension) of the original PPT
-    # image_name is the specific slide image (e.g., slide_001.png)
-    ppt_folder = os.path.join(app.config['PPT_IMAGES_FOLDER'], ppt_name)
-    return send_from_directory(ppt_folder, image_name)
 
 @app.route('/')
 def root():
@@ -1111,8 +761,7 @@ def static_proxy(path):
         return send_from_directory('.', 'pdf_tracker.html')
     if path == 'docx_tracker.html': # Serve docx_tracker.html
         return send_from_directory('.', 'docx_tracker.html')
-    if path == 'ppt_tracker.html': # Serve ppt_tracker.html
-        return send_from_directory('.', 'ppt_tracker.html')
+    
     return send_from_directory('.', path)
 
 
@@ -1287,28 +936,6 @@ def delete_course(course_id):
             except (json.JSONDecodeError, Exception) as e:
                 print(f"Error deleting Video {video_key}: {str(e)}")
 
-        # For PPTs (MISSING IN ORIGINAL CODE - BUG FIX)
-        for ppt_key in r.hkeys('ppts') or []:
-            try:
-                ppt_data = json.loads(r.hget('ppts', ppt_key) or '{}')
-                if ppt_data.get('course_id') == course_id:
-                    # Delete the original PPT file
-                    filepath = os.path.join(app.config['PPT_UPLOAD_FOLDER'], ppt_key)
-                    if os.path.exists(filepath):
-                        os.remove(filepath)
-
-                    # Delete the converted images folder
-                    filename_base = os.path.splitext(ppt_key)[0]
-                    images_folder = os.path.join(app.config['PPT_IMAGES_FOLDER'], filename_base)
-                    if os.path.exists(images_folder):
-                        import shutil
-                        shutil.rmtree(images_folder)
-
-                    # Remove from Redis
-                    r.hdel('ppts', ppt_key)
-                    deleted_files.append(f"PPT: {ppt_key}")
-            except (json.JSONDecodeError, Exception) as e:
-                print(f"Error deleting PPT {ppt_key}: {str(e)}")
 
         # For Audio files (MISSING IN ORIGINAL CODE - BUG FIX)
         for audio_key in r.hkeys('audio_files') or []:
@@ -1342,7 +969,7 @@ def delete_course(course_id):
                     secure_name = secure_filename(filename)
                     if (f':{secure_name}' in key_str and
                         ('progress:' in key_str or 'progress_pdf:' in key_str or
-                         'progress_docx:' in key_str or 'progress_ppt:' in key_str or
+                         'progress_docx:' in key_str or 
                          'progress_audio:' in key_str)):
 
                         r.delete(key_str)

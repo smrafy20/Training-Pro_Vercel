@@ -71,19 +71,7 @@
             </table>
         </div>
 
-        <!-- PPT Section -->
-        <div class="card slide-in">
-            <div class="card-header">
-                <h2 class="card-title">🎯 Presentations</h2>
-                <p class="card-subtitle">Slide presentations and lectures</p>
-            </div>
-            <table id="pptTable">
-                <thead>
-                    <tr><th>📁 File Name</th><th>📋 Type</th><th>🎯 Current Slide</th><th>👨‍🏫 Instructor</th><th>⚡ Action</th></tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
+        
 
         <!-- Audio Section -->
         <div class="card slide-in">
@@ -146,7 +134,6 @@
                     loadVideos();
                     loadPdfs();
                     loadDocxFiles();
-                    loadPptFiles(); // Load PPT files
                     loadAudioFiles(); // Load audio files
                 } else {
                     // Redirect if not authenticated
@@ -283,40 +270,7 @@
         }
     }
 
-    async function loadPptFiles() {
-        if (!studentName) return;
-        if (!selectedCourseId) return;
-
-        const courseParam = `?courseId=${selectedCourseId}`;
-        const res = await fetch(`/api/ppts${courseParam}`, {credentials: 'include'});
-        const ppts = await res.json();
-        const tbody = document.querySelector('#pptTable tbody');
-        tbody.innerHTML = '';
-
-        if (ppts.length === 0) {
-            const tr = document.createElement('tr');
-            tr.innerHTML = '<td colspan="5" style="text-align: center;">No PPT files available for this course</td>';
-            tbody.appendChild(tr);
-            return;
-        }
-
-        for (const p of ppts) {
-            let progressText = "Not Started";
-            try {
-                const progRes = await fetch(`/api/progress_ppt/${studentName}/${p.filename}`, {credentials: 'include'});
-                if(progRes.ok){
-                    const progData = await progRes.json();
-                    if (progData && progData.currentSlide) {
-                        progressText = `Slide ${progData.currentSlide} (${progData.maxProgressPercent ? progData.maxProgressPercent.toFixed(1) : '0.0'}%)`;
-                    }
-                }
-            } catch (e) { console.error("Error fetching PPT progress:", e); }
-            const tr = document.createElement('tr');
-            const instructorName = p.instructor_name || 'Unknown';
-            tr.innerHTML = `<td>${p.filename}</td><td>${p.filetype}</td><td>${progressText}</td><td>${instructorName}</td><td><button class='btn btn-primary' onclick="window.location.href='ppt_tracker.html?ppt=${encodeURIComponent(p.filename)}'" style="padding: var(--space-1) var(--space-3); font-size: 0.75rem;">🎯 View</button></td>`;
-            tbody.appendChild(tr);
-        }
-    }
+    
 
     async function loadAudioFiles() {
         if (!studentName) return;
@@ -354,7 +308,6 @@
             loadVideos();
             loadPdfs();
             loadDocxFiles();
-            loadPptFiles(); // Load PPT files
             loadAudioFiles(); // Load audio files
         }
     });

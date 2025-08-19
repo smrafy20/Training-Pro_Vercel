@@ -2,6 +2,6 @@ Flask
 Flask-Cors
 redis
 Werkzeug
-python-pptx
 Pillow
-pdf2image 
+pdf2image
+upstash-redis  # Required for Vercel KV (Upstash) client

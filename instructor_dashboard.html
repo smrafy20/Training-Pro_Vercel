@@ -263,11 +263,6 @@
                 const docxFiles = await docxRes.json();
                 totalFiles += docxFiles.length;
                 
-                // Count PPT files
-                const pptRes = await fetch(`/api/ppts?courseId=${course.id}`, {credentials: 'include'});
-                const pptFiles = await pptRes.json();
-                totalFiles += pptFiles.length;
-                
                 // Count Audio files
                 const audioRes = await fetch(`/api/audio_files?courseId=${course.id}`, {credentials: 'include'});
                 const audioFiles = await audioRes.json();

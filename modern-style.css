@@ -574,7 +574,7 @@ textarea:focus {
 }
 
 /* ===== MEDIA CONTAINERS ===== */
-.video-container, .audio-container, .pdf-container, .ppt-container {
+.video-container, .audio-container, .pdf-container {
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
   border-radius: var(--radius-xl);
@@ -587,12 +587,12 @@ textarea:focus {
   transition: var(--transition-normal);
 }
 
-.video-container:hover, .audio-container:hover, .pdf-container:hover, .ppt-container:hover {
+.video-container:hover, .audio-container:hover, .pdf-container:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-2xl);
 }
 
-#pdfViewer, #pptViewer {
+#pdfViewer {
   width: 100%;
   height: 900px;
   max-height: 85vh;
@@ -611,7 +611,7 @@ video, audio {
 }
 
 /* ===== VIEWER CONTROLS ===== */
-.pdf-controls, .ppt-controls {
+.pdf-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -757,7 +757,7 @@ video, audio {
     font-size: 2.5rem;
   }
 
-  .pdf-controls, .ppt-controls {
+  .pdf-controls {
     flex-direction: column;
     gap: var(--space-3);
   }
@@ -797,13 +797,13 @@ video, audio {
     font-size: 1.5rem;
   }
 
-  .video-container, .audio-container, .pdf-container, .ppt-container, .progress-info {
+  .video-container, .audio-container, .pdf-container, .progress-info {
     width: 100%;
     margin-left: 0;
     margin-right: 0;
   }
 
-  #pdfViewer, #pptViewer {
+  #pdfViewer {
     height: 700px;
     max-height: 80vh;
   }
