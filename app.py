@@ -196,12 +196,22 @@ class FallbackRedis:
 
 
 def create_kv_client():
-    # Prefer Vercel KV (Upstash) if env vars are present
-    kv_url = os.getenv('KV_REST_API_URL')
-    kv_token = os.getenv('KV_REST_API_TOKEN')
+    # Prefer Vercel KV (Upstash) REST if env vars are present.
+    # Support both Vercel KV naming (KV_REST_API_URL/TOKEN) and Upstash defaults (UPSTASH_REDIS_REST_URL/TOKEN).
+    kv_url = os.getenv('KV_REST_API_URL') or os.getenv('UPSTASH_REDIS_REST_URL')
+    kv_token = os.getenv('KV_REST_API_TOKEN') or os.getenv('UPSTASH_REDIS_REST_TOKEN')
     if kv_url and kv_token and UpstashRedis is not None:
         client = UpstashRedis(url=kv_url, token=kv_token)
         return RedisAdapter(client, 'upstash')
+
+    # Optional: if a Redis URL is provided (e.g., Upstash rediss://), try that next.
+    redis_url = os.getenv('REDIS_URL') or os.getenv('KV_URL')
+    if redis_url:
+        try:
+            client = redis.from_url(redis_url, decode_responses=True)
+            return RedisAdapter(client, 'redis')
+        except Exception as _e:
+            print(f"WARNING: Failed to connect via REDIS_URL/KV_URL: {_e}")
 
     # Fallback to local Redis for development
     host = os.getenv('REDIS_HOST', 'localhost')
