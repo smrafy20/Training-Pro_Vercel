@@ -1,34 +1,14 @@
 {
   "builds": [
     {
-      "src": "api/index.py",
+      "src": "app.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/uploads/(.*)",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/uploads_audio/(.*)",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/uploads_docx/(.*)",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/uploads_pdf/(.*)",
-      "dest": "api/index.py"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/$1"
+      "dest": "app.py"
     }
   ]
 }
