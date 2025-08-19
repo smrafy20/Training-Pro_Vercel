@@ -26,6 +26,19 @@ except Exception:
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'a-super-secret-key-for-dev')
 
+# Session cookie settings: make cookies secure on Vercel
+if os.getenv('VERCEL'):
+    # Vercel runs on HTTPS; allow cross-site usage when needed
+    app.config.update(
+        SESSION_COOKIE_SAMESITE='None',
+        SESSION_COOKIE_SECURE=True,
+    )
+else:
+    app.config.update(
+        SESSION_COOKIE_SAMESITE='Lax',
+        SESSION_COOKIE_SECURE=False,
+    )
+
 # CORS: allow origins from env (comma-separated) or default to localhost for dev
 _frontend_origins = os.getenv('FRONTEND_ORIGIN', '')
 origins = [o.strip() for o in _frontend_origins.split(',') if o.strip()] or ['http://127.0.0.1:5000', 'http://localhost:5000']
@@ -105,6 +118,13 @@ def get_session_info():
     if 'name' in session and 'role' in session:
         return jsonify({'success': True, 'name': session['name'], 'role': session['role']})
     return jsonify({'success': False, 'message': 'No active session'}), 401
+
+@app.route('/api/check_auth', methods=['GET'])
+def check_auth():
+    """Front-end convenience route: returns {authenticated, name, role}."""
+    if 'name' in session and 'role' in session:
+        return jsonify({'authenticated': True, 'name': session['name'], 'role': session['role']})
+    return jsonify({'authenticated': False}), 401
 
 # --- BLOB HELPERS ---
 def _blob_put(pathname: str, body_bytes: bytes, content_type: str, token: str):
