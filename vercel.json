@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "functions": {
+    "api/**/*.py": {
+      "runtime": "python3.11",
+      "excludeFiles": "uploads/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/login.html" },
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
+    { "source": "/uploads/(.*)", "destination": "/api/index.py" },
+    { "source": "/uploads_pdf/(.*)", "destination": "/api/index.py" },
+    { "source": "/uploads_docx/(.*)", "destination": "/api/index.py" },
+    { "source": "/uploads_audio/(.*)", "destination": "/api/index.py" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    }
+  ]
+}

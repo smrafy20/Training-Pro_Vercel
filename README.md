@@ -36,7 +36,7 @@ A comprehensive web-based learning management system that allows instructors to 
 ## 🛠️ Technology Stack
 
 - Backend: Flask (Python web framework)
-- Database: Redis (for session management and progress tracking)
+- Database: Redis (local dev) or Vercel KV (Upstash) in production (for session management and progress tracking)
 - Frontend: HTML5, CSS3, JavaScript (ES6+)
 - File Processing:
   - PDF processing with pdf2image
@@ -175,3 +175,117 @@ The application uses Redis with default settings:
 - Host: localhost
 - Port: 6379
 - Database: 0
+
+## ☁️ Deploying to Vercel with Vercel KV
+
+This project is ready to run on Vercel using Vercel KV (Upstash) instead of a self-hosted Redis. The backend runs as a Python Serverless Function and serves only API routes, while static assets are served directly by Vercel.
+
+Key files involved:
+- Backend app with KV auto-detection: [app.py](app.py)
+- Vercel serverless entrypoint: [api/index.py](api/index.py:1)
+- Vercel configuration and routing: [vercel.json](vercel.json:1)
+- Vercel build artifacts ignored: [.gitignore](.gitignore:1)
+
+### Environment Variables
+
+Set these in Vercel Project Settings → Environment Variables:
+
+- KV_REST_API_URL: Provided by Vercel KV integration
+- KV_REST_API_TOKEN: Provided by Vercel KV integration
+- SECRET_KEY: A long random string for Flask session signing
+- FRONTEND_ORIGIN: Your site origin(s), comma-separated, e.g. https://your-app.vercel.app
+- UPLOAD_ROOT (optional): Override upload root; defaults to /tmp on Vercel
+
+How it works:
+- The application detects Vercel KV if KV_REST_API_URL and KV_REST_API_TOKEN are present and uses Upstash client automatically via create_kv_client in [app.py](app.py:187).
+- Otherwise it falls back to local Redis using REDIS_HOST/REDIS_PORT during local development.
+
+### One-time Data Migration (Local Redis → Vercel KV)
+
+Run locally before deploying (requires access to your existing Redis):
+
+1) Install dependencies locally:
+   pip install -r requirements.txt
+
+2) Export your Upstash credentials as env vars in the same shell:
+   export KV_REST_API_URL="https://...upstash.io"
+   export KV_REST_API_TOKEN="xxxxxxxxxxxxxxxx"
+
+3) Use this quick Python snippet to copy the keys you use in this app:
+   python - <<'PY'
+   import os, json, redis
+   from upstash_redis import Redis as UpstashRedis
+
+   # Local Redis
+   r = redis.Redis(host=os.getenv("REDIS_HOST","localhost"),
+                   port=int(os.getenv("REDIS_PORT","6379")),
+                   db=int(os.getenv("REDIS_DB","0")),
+                   decode_responses=True)
+
+   # Vercel KV (Upstash)
+   kv = UpstashRedis(url=os.environ["KV_REST_API_URL"], token=os.environ["KV_REST_API_TOKEN"])
+
+   # Simple key
+   for k in ["courses"]:
+       val = r.get(k)
+       if val is not None:
+           kv.set(k, val)
+
+   # Hashes
+   for h in ["videos","pdfs","docx_files","audio_files"]:
+       data = r.hgetall(h)
+       if data:
+           # Upstash supports mapping form for HSET
+           kv.hset(h, data)
+
+   # Progress keys (strings)
+   for pattern in ["progress*","progress_pdf*","progress_docx*","progress_audio*"]:
+       for key in r.scan_iter(match=pattern, count=100):
+           val = r.get(key)
+           if val is not None:
+               kv.set(key, val)
+
+   print("Migration completed.")
+   PY
+
+Notes:
+- This only migrates the keys this application uses.
+- If you added custom keys, extend the snippet with your patterns.
+
+### Uploads and File Storage on Vercel
+
+- Vercel serverless filesystem is read-only except for /tmp. The code already detects Vercel and writes to /tmp for uploads. See configuration near the top of [app.py](app.py:26).
+- Files written to /tmp are ephemeral and not persisted across invocations. For production-grade storage, move media to an external store (e.g., Vercel Blob, S3, GCS) and save only metadata/URLs in KV.
+
+### Routing on Vercel
+
+- All static files are served directly by Vercel CDN.
+- API routes are handled by the Flask app through the serverless entry point:
+  - Rewrites configured in [vercel.json](vercel.json:1):
+    - "/" → login.html
+    - "/api/(.*)" → [api/index.py](api/index.py:1)
+
+### CORS and Sessions
+
+- CORS origins are set via FRONTEND_ORIGIN env var. Multiple origins can be provided (comma-separated).
+- Flask sessions are signed cookies. Ensure SECRET_KEY is set in production so sessions remain valid across serverless invocations.
+- Cookies are sent with Secure flag automatically when running on Vercel.
+
+### Step-by-step Deploy on Vercel
+
+1) Create a Vercel project and import this repository.
+2) Add the “Vercel KV” integration to the project (Vercel → Storage → KV). This will inject KV_REST_API_URL and KV_REST_API_TOKEN env vars.
+3) In Project Settings → Environment Variables, add:
+   - SECRET_KEY
+   - FRONTEND_ORIGIN (e.g., https://your-app.vercel.app)
+   - (Optional) UPLOAD_ROOT if you want a custom writable root; otherwise /tmp is used on Vercel.
+4) Run the “One-time Data Migration” locally to copy existing Redis data into Vercel KV (optional if you’re starting fresh).
+5) Commit and deploy. Vercel will:
+   - Serve all static files (HTML/CSS/JS) from the repository root.
+   - Route /api/* to the Flask serverless function via [api/index.py](api/index.py:1).
+6) After deploy completes, open your Vercel URL. The app should load login.html at the root, and API requests will route through /api.
+
+Troubleshooting:
+- If you see “Using in-memory fallback” in logs, make sure KV_REST_API_URL and KV_REST_API_TOKEN are set correctly and the upstash-redis dependency is installed (it is in [requirements.txt](requirements.txt:1)).
+- CORS errors: set FRONTEND_ORIGIN to your deployed domain.
+- Large file uploads will not persist in /tmp; use an external object storage for production media.

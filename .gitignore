@@ -100,3 +100,6 @@ docs/_build/
 *.swo
 *.tmp
 ~$*
+
+# Vercel project directory
+.vercel/

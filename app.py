@@ -15,22 +15,33 @@ except Exception:
 
 
 app = Flask(__name__)
-app.secret_key = 'supersecretkey'  # For session management
-# Configure CORS to properly handle credentials
-CORS(app, supports_credentials=True, origins=['http://127.0.0.1:5000', 'http://localhost:5000'])
+# Secret key from env for security (required on Vercel)
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
 
-# Additional session configuration for better security and consistency
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+# Configure CORS via env FRONTEND_ORIGIN (comma-separated). Defaults to local dev origins.
+frontend_origins = os.getenv('FRONTEND_ORIGIN', '')
+origins = [o.strip() for o in frontend_origins.split(',') if o.strip()] or ['http://127.0.0.1:5000', 'http://localhost:5000']
+CORS(app, supports_credentials=True, origins=origins)
 
-UPLOAD_FOLDER = 'uploads'
-PDF_UPLOAD_FOLDER = 'uploads_pdf' # New folder for PDFs
-DOCX_UPLOAD_FOLDER = 'uploads_docx' # New folder for DOCX files
-AUDIO_UPLOAD_FOLDER = 'uploads_audio' # New folder for Audio files
+# Session cookie settings; secure by default on Vercel/production
+app.config['SESSION_COOKIE_SAMESITE'] = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
+_secure_default = ('VERCEL' in os.environ) or (os.getenv('FLASK_ENV') == 'production')
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('SESSION_COOKIE_SECURE', '1' if _secure_default else '0').lower() in ('1', 'true', 'yes')
+
+# Resolve upload root. On Vercel (read-only FS), default to /tmp unless UPLOAD_ROOT is provided.
+UPLOAD_ROOT = os.getenv('UPLOAD_ROOT')
+if (('VERCEL' in os.environ) or os.getenv('READONLY_FS') == '1') and not UPLOAD_ROOT:
+    UPLOAD_ROOT = '/tmp'
+
+UPLOAD_FOLDER = os.path.join(UPLOAD_ROOT, 'uploads') if UPLOAD_ROOT else 'uploads'
+PDF_UPLOAD_FOLDER = os.path.join(UPLOAD_ROOT, 'uploads_pdf') if UPLOAD_ROOT else 'uploads_pdf'
+DOCX_UPLOAD_FOLDER = os.path.join(UPLOAD_ROOT, 'uploads_docx') if UPLOAD_ROOT else 'uploads_docx'
+AUDIO_UPLOAD_FOLDER = os.path.join(UPLOAD_ROOT, 'uploads_audio') if UPLOAD_ROOT else 'uploads_audio'
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
 ALLOWED_PDF_EXTENSIONS = {'pdf'} # Allowed extensions for PDFs
 ALLOWED_DOCX_EXTENSIONS = {'docx'} # Allowed extensions for DOCX files
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'ogg'} # Allowed extensions for Audio files
+app.config['UPLOAD_ROOT'] = UPLOAD_ROOT
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['PDF_UPLOAD_FOLDER'] = PDF_UPLOAD_FOLDER # Add to app config
 app.config['DOCX_UPLOAD_FOLDER'] = DOCX_UPLOAD_FOLDER # Add to app config
@@ -215,14 +226,12 @@ except Exception as _e:
     print(f"ERROR: Cannot connect to KV/Redis. Using in-memory fallback. Details: {_e}")
     r = FallbackRedis()
 
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-if not os.path.exists(PDF_UPLOAD_FOLDER): # Create PDF upload folder
-    os.makedirs(PDF_UPLOAD_FOLDER)
-if not os.path.exists(DOCX_UPLOAD_FOLDER): # Create DOCX upload folder
-    os.makedirs(DOCX_UPLOAD_FOLDER)
-if not os.path.exists(AUDIO_UPLOAD_FOLDER): # Create AUDIO upload folder
-    os.makedirs(AUDIO_UPLOAD_FOLDER)
+# Best-effort directory creation; on Vercel, only /tmp is writable.
+for p in [UPLOAD_FOLDER, PDF_UPLOAD_FOLDER, DOCX_UPLOAD_FOLDER, AUDIO_UPLOAD_FOLDER]:
+    try:
+        os.makedirs(p, exist_ok=True)
+    except Exception as e:
+        print(f"WARNING: Unable to create directory {p}: {e}")
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
