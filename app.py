@@ -5,7 +5,7 @@ import os
 import redis
 import datetime
 import json
-from vercel_blob import blob # Import the Vercel Blob library
+from vercel_blob import put, del_blob as delete_blob # Correct import
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'a-super-secret-key-for-dev')
@@ -66,18 +66,18 @@ def handle_file_upload(file, course_id, file_type, allowed_extensions_check_func
     filename = secure_filename(file.filename)
 
     try:
-        # Upload to Vercel Blob with a unique path per course
         pathname = f"{course_id}/{filename}"
-        blob_result = blob.upload(pathname=pathname, body=file, options={'access': 'public'})
+        # Use the imported 'put' function
+        blob_result = put(pathname=pathname, body=file, options={'access': 'public'})
 
-        # Save metadata to Redis/KV, including the public URL
         now = datetime.datetime.now().isoformat()
         file_data = {
             'filetype': file_type,
             'last_updated': now,
             'instructor_name': instructor_name,
             'course_id': course_id,
-            'url': blob_result['url']
+            'url': blob_result['url'],
+            'pathname': blob_result['pathname'] # Store pathname for deletion
         }
         r.hset(redis_hash_name, filename, json.dumps(file_data))
 
@@ -106,14 +106,17 @@ def upload_audio():
 def upload_video():
     return handle_file_upload(request.files.get('file'), request.form.get('courseId'), 'video', lambda f: is_allowed(f, ALLOWED_EXTENSIONS), 'videos')
 
-# --- REWRITTEN LISTING ENDPOINTS ---
+# --- LISTING AND DELETING (Adjusted for new delete function) ---
 def list_files_by_type(redis_hash_name):
+    # (This function can remain the same as the last version)
     files_raw = r.hgetall(redis_hash_name)
     files_list = []
     course_id = request.args.get('courseId')
     for k, v_json in files_raw.items():
         try:
+            # This needs to be a complete dictionary for the frontend
             v_data = json.loads(v_json)
+            v_data['filename'] = k # Ensure filename is part of the object
             if course_id and v_data.get('course_id') != course_id:
                 continue
             files_list.append(v_data)
@@ -133,7 +136,6 @@ def list_docx_files(): return list_files_by_type('docx_files')
 @app.route('/api/audio_files', methods=['GET'])
 def list_audio_files(): return list_files_by_type('audio_files')
 
-# --- REWRITTEN DELETE ENDPOINTS ---
 def delete_file_by_type(filename, redis_hash_name):
     if session.get('role') != 'instructor':
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
@@ -144,8 +146,9 @@ def delete_file_by_type(filename, redis_hash_name):
 
     try:
         file_data = json.loads(file_json)
+        # Use the imported 'delete_blob' function
         if file_data.get('url'):
-            blob.delete(file_data['url'])
+            delete_blob(file_data['url'])
 
         r.hdel(redis_hash_name, filename)
         return jsonify({'success': True, 'message': 'File deleted'})
@@ -165,6 +168,89 @@ def delete_docx(filename): return delete_file_by_type(filename, 'docx_files')
 def delete_audio(filename): return delete_file_by_type(filename, 'audio_files')
 
 # ... (Keep all your other routes for courses, progress, etc.)
+# --- ADD THE MISSING ROUTES BACK IN ---
+@app.route('/api/progress/<student>/<filename>', methods=['GET', 'POST'])
+def progress(student, filename):
+    key = f'progress:{student}:{filename}'
+    if request.method == 'GET':
+        progress_val = r.get(key) or 0
+        return jsonify({'progress': float(progress_val)})
+    else:
+        data = request.json
+        progress_val = data.get('progress', 0)
+        r.set(key, progress_val)
+        return jsonify({'success': True})
+
+@app.route('/api/progress_pdf/<student>/<filename>', methods=['GET', 'POST'])
+def pdf_progress(student, filename):
+    key = f'progress_pdf:{student}:{secure_filename(filename)}'
+    if request.method == 'GET':
+        progress_data_json = r.get(key)
+        if progress_data_json:
+            return jsonify(json.loads(progress_data_json))
+        return jsonify({'currentPage': 1, 'maxProgressPercent': 0})
+    else:
+        data = request.json
+        r.set(key, json.dumps(data))
+        return jsonify({'success': True})
+
+@app.route('/api/progress_docx/<student>/<filename>', methods=['GET', 'POST'])
+def docx_progress(student, filename):
+    key = f'progress_docx:{student}:{secure_filename(filename)}'
+    if request.method == 'GET':
+        progress_data_json = r.get(key)
+        if progress_data_json:
+            return jsonify(json.loads(progress_data_json))
+        return jsonify({'maxProgressPercent': 0})
+    else:
+        data = request.json
+        r.set(key, json.dumps(data))
+        return jsonify({'success': True})
+
+@app.route('/api/progress_audio/<student>/<filename>', methods=['GET', 'POST'])
+def audio_progress(student, filename):
+    key = f'progress_audio:{student}:{secure_filename(filename)}'
+    if request.method == 'GET':
+        progress_val = r.get(key) or 0
+        return jsonify({'progress': float(progress_val)})
+    else:
+        data = request.json
+        progress_val = data.get('progress', 0)
+        r.set(key, progress_val)
+        return jsonify({'success': True})
+
+@app.route('/api/courses', methods=['GET', 'POST'])
+def courses():
+    if request.method == 'GET':
+        courses_json = r.get('courses')
+        return jsonify(json.loads(courses_json) if courses_json else [])
+
+    if request.method == 'POST':
+        if session.get('role') != 'instructor':
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+        data = request.json
+        course_name = data.get('courseName')
+        instructor_name = session.get('name')
+
+        if not course_name:
+            return jsonify({'success': False, 'message': 'Course name required'}), 400
+
+        courses_json = r.get('courses')
+        courses = json.loads(courses_json) if courses_json else []
+
+        if any(c['name'] == course_name for c in courses):
+            return jsonify({'success': False, 'message': 'Course name already exists'}), 409
+
+        new_course = {
+            'id': str(len(courses) + 1),
+            'name': course_name,
+            'instructor': instructor_name,
+            'created_at': datetime.datetime.now().isoformat()
+        }
+        courses.append(new_course)
+        r.set('courses', json.dumps(courses))
+        return jsonify({'success': True, 'course': new_course})
 
 # --- STATIC FILE & ROOT ROUTES ---
 @app.route('/')
