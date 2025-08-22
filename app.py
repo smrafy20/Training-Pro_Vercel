@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, session, send_from_directory, redirect
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import redis
 import datetime
@@ -86,6 +87,13 @@ try:
     except Exception:
         # Some clients may not support exists; set defensively
         r.set('courses', json.dumps([]))
+    # Ensure 'users' key exists (list of registered users)
+    try:
+        users_raw = r.get('users')
+        if not users_raw:
+            r.set('users', json.dumps([]))
+    except Exception:
+        r.set('users', json.dumps([]))
 except Exception as e:
     print(f"ERROR: Cannot connect to Redis/KV. {e}")
     r = None
@@ -97,16 +105,93 @@ ALLOWED_DOCX_EXTENSIONS = {'docx'}
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'ogg'}
 
 # --- AUTH AND SESSION ROUTES ---
+def _load_users():
+    if not r:
+        return []
+    data = r.get('users')
+    if not data:
+        return []
+    try:
+        return json.loads(data)
+    except Exception:
+        return []
+
+def _save_users(users):
+    if r:
+        r.set('users', json.dumps(users))
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.json or {}
+    full_name = (data.get('fullName') or '').strip()
+    phone = (data.get('phone') or '').strip()
+    password = data.get('password') or ''
+    confirm = data.get('confirmPassword') or ''
+    role = data.get('role')
+
+    if not full_name or not phone or not password or not confirm or role not in ['instructor', 'student']:
+        return jsonify({'success': False, 'message': 'All fields are required and role must be valid.'}), 400
+    if password != confirm:
+        return jsonify({'success': False, 'message': 'Passwords do not match.'}), 400
+    if len(password) < 6:
+        return jsonify({'success': False, 'message': 'Password must be at least 6 characters.'}), 400
+
+    users = _load_users()
+    lname = full_name.lower()
+    # Ensure unique name (case-insensitive) and phone
+    if any(u['full_name'].lower() == lname for u in users):
+        return jsonify({'success': False, 'message': 'Name already registered.'}), 409
+    if any(u.get('phone') == phone for u in users):
+        return jsonify({'success': False, 'message': 'Phone already registered.'}), 409
+
+    user_id = str(len(users) + 1)
+    users.append({
+        'id': user_id,
+        'full_name': full_name,
+        'phone': phone,
+        'password_hash': generate_password_hash(password),
+        'role': role,
+        'created_at': datetime.datetime.now().isoformat()
+    })
+    _save_users(users)
+    return jsonify({'success': True, 'message': 'Registration successful. You can now login.'})
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.json
-    name = data.get('name')
+    data = request.json or {}
+    # Password-based path if password provided
+    password = data.get('password')
+    identifier = (data.get('name') or '').strip()  # may be name or phone
     role = data.get('role')
+
+    if password:
+        if not identifier or role not in ['instructor', 'student']:
+            return jsonify({'success': False, 'message': 'Identifier, role and password required.'}), 400
+        users = _load_users()
+        ident_lower = identifier.lower()
+        matched = None
+        for u in users:
+            if u['role'] != role:
+                continue
+            if u['full_name'].lower() == ident_lower or u.get('phone') == identifier:
+                matched = u
+                break
+        if not matched or not check_password_hash(matched['password_hash'], password):
+            return jsonify({'success': False, 'message': 'Invalid credentials.'}), 401
+        session['name'] = matched['full_name']
+        session['role'] = matched['role']
+        session['user_id'] = matched['id']
+        return jsonify({'success': True, 'role': matched['role']})
+
+    # Fallback to legacy direct login (no password) for backward compatibility
+    name = identifier
     if not name or role not in ['instructor', 'student']:
         return jsonify({'success': False, 'message': 'Invalid login'}), 400
+    # Optional: disable legacy mode unless explicitly allowed
+    if os.getenv('DISABLE_LEGACY_LOGIN', '0') == '1':
+        return jsonify({'success': False, 'message': 'Password login required.'}), 403
     session['name'] = name
     session['role'] = role
-    return jsonify({'success': True, 'role': role})
+    return jsonify({'success': True, 'role': role, 'legacy': True})
 
 @app.route('/api/logout', methods=['POST'])
 def logout():

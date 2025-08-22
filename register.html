@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register - Training PRO</title>
+  <link rel="stylesheet" href="modern-style.css" />
+</head>
+<body class="fade-in">
+  <nav>
+    <ul>
+      <li><span class="site-title">Training PRO</span></li>
+    </ul>
+  </nav>
+  <div class="main-container fade-in">
+    <div class="dashboard-header">
+      <h1>Create Your Account</h1>
+      <p class="welcome-message">Register to access the platform</p>
+    </div>
+    <form id="registerForm" class="slide-in">
+      <label for="fullName">Full Name</label>
+      <input id="fullName" type="text" required placeholder="Full name" />
+
+      <label for="phone">Phone Number</label>
+      <input id="phone" type="tel" required placeholder="Phone number" />
+
+      <label for="password">Password</label>
+      <input id="password" type="password" required minlength="6" placeholder="At least 6 characters" />
+
+      <label for="confirmPassword">Confirm Password</label>
+      <input id="confirmPassword" type="password" required minlength="6" placeholder="Repeat password" />
+
+      <div class="radio-group">
+        <label>Select Your Role</label>
+        <label><input type="radio" name="role" value="instructor" required /> 🎓 Instructor</label>
+        <label><input type="radio" name="role" value="student" required /> 📚 Student</label>
+      </div>
+      <button type="submit" class="btn btn-primary">Register</button>
+      <p style="margin-top:1rem;font-size:0.9rem;">Already have an account? <a href="login.html">Login</a></p>
+    </form>
+  </div>
+  <script>
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fullName = document.getElementById('fullName').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      const role = document.querySelector('input[name="role"]:checked').value;
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ fullName, phone, password, confirmPassword, role })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('Registration successful! Please login.');
+          window.location.href = 'login.html';
+        } else {
+          alert(data.message || 'Registration failed');
+        }
+      } catch (err) {
+        alert('Network error during registration');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -25,35 +25,39 @@
         </div>
 
         <form id="loginForm" class="slide-in">
-            <label for="name">Full Name</label>
-            <input type="text" id="name" placeholder="Enter your full name" required>
-
+            <label for="identifier">Name or Phone</label>
+            <input type="text" id="identifier" placeholder="Enter your full name or phone" required>
+            <label for="password">Password <small style="font-weight:400;">(leave blank for legacy quick login)</small></label>
+            <input type="password" id="password" placeholder="Password (if registered)">
             <div class="radio-group">
                 <label>Select Your Role</label>
                 <label><input type="radio" name="role" value="instructor" required> 🎓 Instructor</label>
                 <label><input type="radio" name="role" value="student" required> 📚 Student</label>
             </div>
-
             <button type="submit" class="btn btn-primary">Sign In</button>
+            <p style="margin-top:1rem;font-size:0.9rem;">Need an account? <a href="register.html">Register</a></p>
         </form>
     </div>
 
-    <script>    document.getElementById('loginForm').onsubmit = async function(e) {
+    <script>
+    document.getElementById('loginForm').onsubmit = async function(e) {
         e.preventDefault();
-        const name = document.getElementById('name').value;
+        const name = document.getElementById('identifier').value;
+        const password = document.getElementById('password').value;
         const role = document.querySelector('input[name="role"]:checked').value;
+        const payload = password ? { name, password, role } : { name, role };
         const res = await fetch('/api/login', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             credentials: 'include',
-            body: JSON.stringify({name, role})
+            body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.success) {
             if (role === 'instructor') window.location.href = 'instructor_dashboard.html';
-            else window.location.href = 'course_selection.html';  // Send students to course selection first
+            else window.location.href = 'course_selection.html';
         } else {
-            alert('Login failed: ' + data.message);
+            alert('Login failed: ' + (data.message || 'Unknown error'));
         }
     };
     </script>
