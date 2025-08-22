@@ -488,6 +488,26 @@ def courses():
         r.set('courses', json.dumps(courses))
         return jsonify({'success': True, 'course': new_course})
 
+@app.route('/api/courses/<course_id>', methods=['DELETE'])
+def delete_course(course_id):
+    """Delete a course by id. Only the instructor who created it may delete.
+    Does NOT cascade to uploaded files or progress records (intentional minimal scope)."""
+    if session.get('role') != 'instructor':
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+    courses_json = r.get('courses')
+    courses = json.loads(courses_json) if courses_json else []
+    target = next((c for c in courses if c.get('id') == course_id), None)
+    if not target:
+        return jsonify({'success': False, 'message': 'Course not found'}), 404
+    if target.get('instructor') != session.get('name'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    # Remove the course (keep ordering of remaining items; do not reassign IDs)
+    remaining = [c for c in courses if c.get('id') != course_id]
+    r.set('courses', json.dumps(remaining))
+    return jsonify({'success': True, 'message': 'Course deleted'})
+
 # --- Blob-aware redirects for legacy local file URLs ---
 def _send_or_redirect_from_kv(hash_name: str, folder: str, filename: str):
     """
